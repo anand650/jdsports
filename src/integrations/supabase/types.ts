@@ -14,7 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      calls: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          customer_number: string
+          ended_at: string | null
+          id: string
+          started_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          customer_number: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          customer_number?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suggestions: {
+        Row: {
+          call_id: string
+          created_at: string
+          id: string
+          text: string
+        }
+        Insert: {
+          call_id: string
+          created_at?: string
+          id?: string
+          text: string
+        }
+        Update: {
+          call_id?: string
+          created_at?: string
+          id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggestions_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transcripts: {
+        Row: {
+          call_id: string
+          created_at: string
+          id: string
+          role: string
+          text: string
+        }
+        Insert: {
+          call_id: string
+          created_at?: string
+          id?: string
+          role: string
+          text: string
+        }
+        Update: {
+          call_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transcripts_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
