@@ -128,37 +128,59 @@ export const Chatbot = () => {
   };
 
   const simulateAIResponse = async (userMessage: ChatMessage) => {
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    try {
+      // Call our RAG chatbot endpoint
+      const { data, error } = await supabase.functions.invoke('chatbot-rag', {
+        body: {
+          message: userMessage.content,
+          sessionId: session!.id
+        }
+      });
 
-    const content = userMessage.content.toLowerCase();
-    let response = '';
-    let shouldEscalate = false;
+      if (error) {
+        console.error('Error calling chatbot function:', error);
+        throw error;
+      }
 
-    if (content.includes('complaint') || content.includes('refund') || content.includes('problem') || content.includes('issue')) {
-      response = "I understand you're having an issue. Let me connect you with one of our customer service representatives who can better assist you with this matter.";
-      shouldEscalate = true;
-    } else if (content.includes('order') || content.includes('delivery')) {
-      response = "I can help you track your order! To check your order status, I'll need your order number. You can find it in your confirmation email. Alternatively, you can log in to your account to view all your orders.";
-    } else if (content.includes('size') || content.includes('fit')) {
-      response = "For sizing help, I recommend checking our size guide on each product page. We also offer free returns within 365 days, so you can exchange for a different size if needed. What product are you looking at?";
-    } else if (content.includes('price') || content.includes('discount') || content.includes('sale')) {
-      response = "We regularly have sales and promotions! Check out our Sale section for the latest deals. You can also sign up for our newsletter to get exclusive offers and early access to sales.";
-    } else {
-      response = "Thanks for your message! I'm here to help with product information, order tracking, sizing questions, and general store inquiries. Is there something specific I can assist you with today?";
+      const response = data;
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to get AI response');
+      }
+
+      // The AI message is already saved to the database by the edge function
+      // We just need to trigger a re-fetch or wait for real-time updates
+      // For now, let's add the message locally to ensure immediate UI update
+      const aiMessage: ChatMessage = {
+        id: `ai_${Date.now()}`,
+        session_id: session!.id,
+        sender_type: 'ai',
+        content: response.message,
+        metadata: { 
+          escalation_suggested: response.needsEscalation,
+          from_rag: true 
+        },
+        created_at: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+      setNeedsEscalation(response.needsEscalation);
+      
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      
+      // Fallback response
+      const fallbackMessage: ChatMessage = {
+        id: `ai_${Date.now()}`,
+        session_id: session!.id,
+        sender_type: 'ai',
+        content: "I'm sorry, I'm having trouble processing your message right now. Please try again in a moment, or I can connect you with one of our human agents for immediate assistance.",
+        metadata: { escalation_suggested: true, is_fallback: true },
+        created_at: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, fallbackMessage]);
+      setNeedsEscalation(true);
     }
-
-    const aiMessage: ChatMessage = {
-      id: `ai_${Date.now()}`,
-      session_id: session!.id,
-      sender_type: 'ai',
-      content: response,
-      metadata: { escalation_suggested: shouldEscalate },
-      created_at: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, aiMessage]);
-    setNeedsEscalation(shouldEscalate);
   };
 
   const requestHumanAgent = async () => {
