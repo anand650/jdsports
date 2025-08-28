@@ -4,7 +4,7 @@ import { ProductGrid } from './ProductGrid';
 import { ProductDetail } from './ProductDetail';
 import { Cart } from './Cart';
 import { Chatbot } from './Chatbot';
-import { KnowledgeBaseAdmin } from './KnowledgeBaseAdmin';
+import { AdminPanel } from './AdminPanel';
 import { Product, CartItem } from '@/types/ecommerce';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,7 @@ export const EcommerceLayout = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -239,10 +239,8 @@ export const EcommerceLayout = () => {
         )}
       </main>
 
-      {/* Admin Panel - Temporary for setup */}
-      <div className="fixed bottom-6 left-6 z-40">
-        <KnowledgeBaseAdmin />
-      </div>
+      {/* Admin Panel - Only show to admin users */}
+      {userProfile?.role === 'admin' && <AdminPanel />}
 
       <Chatbot />
     </div>
