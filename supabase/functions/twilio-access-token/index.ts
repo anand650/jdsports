@@ -17,16 +17,26 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Force refresh environment variables
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const apiKey = Deno.env.get("TWILIO_API_KEY");
     const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET");
     const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
-    console.log("Credential check (updated):");
-    console.log("TWILIO_ACCOUNT_SID:", accountSid ? "✓ Present" : "✗ Missing");
-    console.log("TWILIO_API_KEY:", apiKey ? "✓ Present" : "✗ Missing");
-    console.log("TWILIO_API_KEY_SECRET:", apiSecret ? "✓ Present" : "✗ Missing");
-    console.log("TWILIO_TWIML_APP_SID:", appSid ? "✓ Present" : "✗ Missing");
+    console.log("=== TWILIO ACCESS TOKEN FUNCTION v2.0 ===");
+    console.log("Environment variable check:");
+    console.log("TWILIO_ACCOUNT_SID:", accountSid ? `✓ Present (${accountSid.length} chars)` : "✗ Missing");
+    console.log("TWILIO_API_KEY:", apiKey ? `✓ Present (${apiKey.length} chars)` : "✗ Missing");
+    console.log("TWILIO_API_KEY_SECRET:", apiSecret ? `✓ Present (${apiSecret.length} chars)` : "✗ Missing");
+    console.log("TWILIO_TWIML_APP_SID:", appSid ? `✓ Present (${appSid.length} chars)` : "✗ Missing");
+    
+    // Debug: Show all env vars starting with TWILIO (values masked)
+    console.log("All TWILIO env vars:");
+    for (const [key, value] of Object.entries(Deno.env.toObject())) {
+      if (key.startsWith('TWILIO_')) {
+        console.log(`  ${key}: ${value ? 'SET' : 'UNSET'}`);
+      }
+    }
 
     // Log actual values (first few chars only for security)
     console.log("Account SID starts with:", accountSid?.substring(0, 6));
