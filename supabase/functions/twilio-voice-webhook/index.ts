@@ -94,13 +94,28 @@ serve(async (req) => {
           .update({ agent_id: availableAgents[0].id })
           .eq('twilio_call_sid', CallSid as string);
 
-        // Generate TwiML to directly dial the agent's device
+        // Generate TwiML to directly dial the agent's device with recording and transcription
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Say voice="alice">Connecting you to our agent.</Say>
-          <Dial timeout="30" record="record-from-ringing">
+          <Dial timeout="30" 
+                record="record-from-ringing" 
+                recordingStatusCallback="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-call-status"
+                recordingStatusCallbackEvent="completed">
             <Client>agent</Client>
+            <Stream 
+              url="wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream"
+              name="stream"
+              track="both_tracks">
+            </Stream>
           </Dial>
+          <Gather 
+            input="speech" 
+            speechTimeout="auto"
+            speechModel="experimental_conversations"
+            transcribeCallback="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-transcription"
+            action="">
+          </Gather>
         </Response>`;
 
         return new Response(twiml, {

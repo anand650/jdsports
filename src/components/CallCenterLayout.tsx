@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
 import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 import { AISuggestionsPanel } from './AISuggestionsPanel';
+import { CallHistory } from './CallHistory';
 import { CustomerInfoPanel } from './CustomerInfoPanel';
 import { IncomingCallNotification } from './IncomingCallNotification';
 import { Call, CustomerProfile } from '@/types/call-center';
@@ -228,11 +229,21 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
                 </div>
               </div>
               
-              {/* Right Side - Customer Info */}
+              {/* Center - Customer Info */}
               <div className="w-80">
                 <CustomerInfoPanel 
                   customerProfile={customerProfile}
                   activeCall={activeCall}
+                />
+              </div>
+              
+              {/* Right Side - Call History */}
+              <div className="w-80">
+                <CallHistory 
+                  onSelectCall={(call) => {
+                    // Could implement call details view here
+                    console.log('Selected call:', call);
+                  }}
                 />
               </div>
             </div>

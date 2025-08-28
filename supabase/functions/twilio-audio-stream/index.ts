@@ -7,11 +7,9 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  const { headers } = req;
-  const upgradeHeader = headers.get("upgrade") || "";
-
-  if (upgradeHeader.toLowerCase() !== "websocket") {
-    return new Response("Expected WebSocket connection", { status: 400 });
+  // Handle WebSocket upgrade for Twilio Media Streams
+  if (req.headers.get("upgrade") !== "websocket") {
+    return new Response("Expected websocket", { status: 400 });
   }
 
   const { socket, response } = Deno.upgradeWebSocket(req);
@@ -21,149 +19,72 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  let currentCallId: string | null = null;
-  let audioBuffer: string[] = [];
+  let callSid: string | null = null;
+  let callId: string | null = null;
+  
+  socket.addEventListener("open", () => {
+    console.log("WebSocket connection opened for audio streaming");
+  });
 
-  socket.onopen = () => {
-    console.log('WebSocket connection opened for audio streaming');
-  };
-
-  socket.onmessage = async (event) => {
+  socket.addEventListener("message", async (event) => {
     try {
-      const data = JSON.parse(event.data);
-      console.log('Received audio stream event:', data.event);
-
-      switch (data.event) {
-        case 'connected':
-          console.log('Twilio Media Stream connected');
-          break;
-
-        case 'start':
-          currentCallId = data.start?.callSid;
-          console.log('Stream started for call:', currentCallId);
-          
-          // Find call record and update status
-          if (currentCallId) {
-            await supabase
-              .from('calls')
-              .update({ 
-                call_status: 'in-progress',
-                started_at: new Date().toISOString()
-              })
-              .eq('twilio_call_sid', currentCallId);
-          }
-          break;
-
-        case 'media':
-          if (data.media?.payload) {
-            audioBuffer.push(data.media.payload);
-            
-            // Process audio chunks every 2 seconds (approximately)
-            if (audioBuffer.length >= 20) {
-              await processAudioChunk(audioBuffer.join(''), currentCallId);
-              audioBuffer = [];
-            }
-          }
-          break;
-
-        case 'stop':
-          console.log('Stream stopped for call:', currentCallId);
-          
-          // Process remaining audio
-          if (audioBuffer.length > 0 && currentCallId) {
-            await processAudioChunk(audioBuffer.join(''), currentCallId);
-            audioBuffer = [];
-          }
-
-          // Update call status
-          if (currentCallId) {
-            await supabase
-              .from('calls')
-              .update({ 
-                call_status: 'completed',
-                ended_at: new Date().toISOString()
-              })
-              .eq('twilio_call_sid', currentCallId);
-          }
-          break;
-      }
-    } catch (error) {
-      console.error('Error processing audio stream:', error);
-    }
-  };
-
-  async function processAudioChunk(audioPayload: string, callSid: string | null) {
-    if (!callSid) return;
-
-    try {
-      // Find call record
-      const { data: callRecord } = await supabase
-        .from('calls')
-        .select('id')
-        .eq('twilio_call_sid', callSid)
-        .single();
-
-      if (!callRecord) return;
-
-      // Convert base64 audio to binary for transcription
-      const binaryAudio = atob(audioPayload);
-      const audioBytes = new Uint8Array(binaryAudio.length);
+      const message = JSON.parse(event.data);
       
-      for (let i = 0; i < binaryAudio.length; i++) {
-        audioBytes[i] = binaryAudio.charCodeAt(i);
-      }
+      console.log("Received message:", message.event);
 
-      // Create audio blob for OpenAI Whisper
-      const audioBlob = new Blob([audioBytes], { type: 'audio/wav' });
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.wav');
-      formData.append('model', 'whisper-1');
-      formData.append('language', 'en');
-
-      // Send to OpenAI for transcription
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        const transcriptionResult = await response.json();
-        
-        if (transcriptionResult.text && transcriptionResult.text.trim()) {
-          // Save transcript to database
-          await supabase
-            .from('transcripts')
-            .insert({
-              call_id: callRecord.id,
-              role: 'customer', // Assuming incoming audio is from customer
-              text: transcriptionResult.text,
-              created_at: new Date().toISOString()
-            });
-
-          // Generate AI suggestions
-          await supabase.functions.invoke('generate-suggestion', {
-            body: {
-              callId: callRecord.id,
-              customerMessage: transcriptionResult.text
-            }
-          });
-        }
+      switch (message.event) {
+        case 'connected':
+          console.log("Connected to Twilio Media Stream");
+          break;
+          
+        case 'start':
+          callSid = message.start.callSid;
+          console.log(`Media stream started for call: ${callSid}`);
+          
+          // Find the call record
+          const { data: callRecord } = await supabase
+            .from('calls')
+            .select('id')
+            .eq('twilio_call_sid', callSid)
+            .single();
+            
+          if (callRecord) {
+            callId = callRecord.id;
+            console.log(`Found call record: ${callId}`);
+          }
+          break;
+          
+        case 'media':
+          // Handle audio data - could be used for real-time transcription
+          // For now, we'll just log that we received audio data
+          if (message.media && callId) {
+            console.log(`Received audio chunk for call ${callId}, sequence: ${message.sequenceNumber}`);
+            
+            // Here you could implement real-time transcription by sending
+            // the audio data to a speech-to-text service
+            // For now, we'll rely on Twilio's built-in transcription
+          }
+          break;
+          
+        case 'stop':
+          console.log(`Media stream stopped for call: ${callSid}`);
+          break;
+          
+        default:
+          console.log(`Unknown event: ${message.event}`);
       }
     } catch (error) {
-      console.error('Error processing audio chunk:', error);
+      console.error("Error processing message:", error);
     }
-  }
+  });
 
-  socket.onclose = () => {
-    console.log('WebSocket connection closed');
-  };
+  socket.addEventListener("close", () => {
+    console.log(`WebSocket connection closed for call: ${callSid}`);
+  });
 
-  socket.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
+  socket.addEventListener("error", (error) => {
+    console.error("WebSocket error:", error);
+  });
 
   return response;
 });
