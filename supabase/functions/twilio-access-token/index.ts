@@ -123,7 +123,7 @@ serve(async (req: Request) => {
   try {
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const apiKey = Deno.env.get("TWILIO_API_KEY");
-    const apiSecret = Deno.env.get("TWILIO_API_SECRET");
+    const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET");
     const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
     if (!accountSid || !apiKey || !apiSecret || !appSid) {
