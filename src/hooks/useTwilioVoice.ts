@@ -66,13 +66,15 @@ export const useTwilioVoice = () => {
       }
 
       console.log('Creating Twilio device with token...');
+      console.log('Token starts with:', data.token.substring(0, 50) + '...');
       
       const twilioDevice = new Device(data.token, {
-        logLevel: 1,
+        logLevel: 2, // More verbose logging
         allowIncomingWhileBusy: true,
         sounds: {
           incoming: undefined, // Disable incoming sound, we'll handle notifications in UI
-        }
+        },
+        edge: ['dublin', 'sydney', 'tokyo'], // Try multiple edge locations
       });
 
       // Device event listeners
@@ -87,6 +89,13 @@ export const useTwilioVoice = () => {
 
       twilioDevice.on('error', (error) => {
         console.error('Twilio device error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          causes: error.causes,
+          solutions: error.solutions,
+          originalError: error.originalError
+        });
         
         // Don't retry automatically to prevent infinite loops
         // Just notify the user and mark device as not ready
@@ -94,7 +103,7 @@ export const useTwilioVoice = () => {
         
         toast({
           title: "Voice Connection Error",
-          description: "Voice connection lost. Please refresh to reconnect.",
+          description: `Connection failed (${error.code}). Please check your network and refresh.`,
           variant: "destructive",
         });
       });
@@ -108,7 +117,9 @@ export const useTwilioVoice = () => {
       });
 
       twilioDevice.on('registered', () => {
-        console.log('Device registered');
+        console.log('Device registered successfully');
+        console.log('Device identity:', twilioDevice.identity);
+        console.log('Device state:', twilioDevice.state);
       });
 
       twilioDevice.on('unregistered', () => {
@@ -246,11 +257,13 @@ export const useTwilioVoice = () => {
     isMuted,
     isOnHold,
     isDeviceReady,
+    isInitializing,
     answerCall,
     rejectCall,
     hangupCall,
     toggleMute,
     toggleHold,
     makeCall,
+    retryConnection: initializeDevice, // Manual retry function
   };
 };

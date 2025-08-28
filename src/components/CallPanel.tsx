@@ -21,11 +21,13 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
     isMuted,
     isOnHold,
     isDeviceReady,
+    isInitializing,
     answerCall,
     rejectCall,
     hangupCall,
     toggleMute,
     toggleHold,
+    retryConnection,
   } = useTwilioVoice();
 
   // Timer for call duration
@@ -183,14 +185,24 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
           <div className="text-center py-8">
             <Phone className="mx-auto h-12 w-12 text-sidebar-primary mb-4" />
             <p className="text-sidebar-foreground font-medium">
-              {isDeviceReady ? "Ready for Calls" : "Initializing Voice..."}
+              {isDeviceReady ? "Ready for Calls" : isInitializing ? "Connecting..." : "Connection Failed"}
             </p>
             <p className="text-sm text-sidebar-accent-foreground mt-2">
               {isDeviceReady 
                 ? "Waiting for incoming calls" 
-                : "Setting up Twilio voice device"
+                : isInitializing 
+                  ? "Setting up Twilio voice device" 
+                  : "Unable to connect to voice service"
               }
             </p>
+            {!isDeviceReady && !isInitializing && (
+              <button 
+                onClick={retryConnection}
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm"
+              >
+                Retry Connection
+              </button>
+            )}
           </div>
         )}
       </CardContent>
