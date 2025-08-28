@@ -261,27 +261,19 @@ export const AgentDashboard = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        {/* Header */}
-        <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
-          <div className="flex-1 text-center">
-            <h1 className="text-lg font-semibold">Agent Dashboard</h1>
-          </div>
-        </header>
+      <div className="h-screen flex w-full bg-background">
         {/* Sidebar */}
-        <aside className="pt-12">
-          <AgentSidebar
-            sessions={activeSessions}
-            selectedSession={selectedSession}
-            onSelectSession={setSelectedSession}
-            onTakeSession={handleTakeSession}
-            onCloseSession={handleCloseSession}
-            loading={loading}
-          />
-        </aside>
+        <AgentSidebar
+          sessions={activeSessions}
+          selectedSession={selectedSession}
+          onSelectSession={setSelectedSession}
+          onTakeSession={handleTakeSession}
+          onCloseSession={handleCloseSession}
+          loading={loading}
+        />
 
         {/* Main Content */}
-        <main className="flex-1 pt-12">
+        <main className="flex-1 h-full">
           {selectedSession ? (
             <ChatPanel
               session={selectedSession}
@@ -290,13 +282,13 @@ export const AgentDashboard = () => {
             />
           ) : (
             <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">💬</div>
-              <h2 className="text-2xl font-semibold mb-2">Welcome, {userProfile?.full_name || 'Agent'}</h2>
-              <p className="text-muted-foreground">
-                Select a chat session from the sidebar to start assisting customers
-              </p>
-            </div>
+              <div className="text-center">
+                <div className="text-6xl mb-4">💬</div>
+                <h2 className="text-2xl font-semibold mb-2">Welcome, {userProfile?.full_name || 'Agent'}</h2>
+                <p className="text-muted-foreground">
+                  Select a chat session from the sidebar to start assisting customers
+                </p>
+              </div>
             </div>
           )}
         </main>

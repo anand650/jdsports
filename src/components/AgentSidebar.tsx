@@ -42,7 +42,7 @@ export const AgentSidebar = ({
   };
 
   return (
-    <Sidebar className="w-80 border-r">
+    <Sidebar className="w-80 border-r h-full">
       <SidebarHeader className="border-b p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
