@@ -26,17 +26,17 @@ serve(async (req) => {
       throw new Error('Call ID is required');
     }
 
-    console.log('Ending call:', callId);
+    console.log('Starting transcription for call:', callId);
 
     // Get the call record to find the Twilio Call SID
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
-      .select('twilio_call_sid, call_status')
+      .select('twilio_call_sid')
       .eq('id', callId)
       .single();
 
-    if (callError || !callRecord) {
-      throw new Error('Call record not found');
+    if (callError || !callRecord || !callRecord.twilio_call_sid) {
+      throw new Error('Call record not found or missing Twilio Call SID');
     }
 
     console.log('Found call record:', callRecord);
@@ -51,47 +51,34 @@ serve(async (req) => {
 
     const client = twilio(accountSid, authToken);
 
-    // End the actual Twilio call if it's still active
-    if (callRecord.twilio_call_sid && callRecord.call_status !== 'completed') {
-      try {
-        console.log('Hanging up Twilio call:', callRecord.twilio_call_sid);
-        
-        await client.calls(callRecord.twilio_call_sid).update({
-          status: 'completed'
-        });
-        
-        console.log('Successfully ended Twilio call');
-      } catch (twilioError) {
-        console.error('Error ending Twilio call:', twilioError);
-        // Continue to update our database even if Twilio call couldn't be ended
-      }
+    try {
+      // Start live transcription on the call
+      const stream = await client.calls(callRecord.twilio_call_sid).streams.create({
+        url: `wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream`,
+        name: 'transcription-stream',
+        track: 'both_tracks'
+      });
+
+      console.log('Started transcription stream:', stream.sid);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Transcription started',
+          streamSid: stream.sid
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+
+    } catch (twilioError) {
+      console.error('Error starting Twilio transcription:', twilioError);
+      throw new Error(`Failed to start transcription: ${twilioError.message}`);
     }
-
-    // Update the call record in our database
-    const { error: updateError } = await supabase
-      .from('calls')
-      .update({ 
-        call_status: 'completed',
-        ended_at: new Date().toISOString() 
-      })
-      .eq('id', callId);
-
-    if (updateError) {
-      console.error('Error updating call record:', updateError);
-      throw updateError;
-    }
-
-    console.log('Call ended successfully');
-
-    return new Response(
-      JSON.stringify({ success: true, message: 'Call ended successfully' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
 
   } catch (error) {
-    console.error('Error ending call:', error);
+    console.error('Error starting transcription:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

@@ -99,6 +99,25 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       if (profile) {
         setCustomerProfile(profile);
       }
+
+      // Start transcription for this call
+      try {
+        // For now, let's simulate transcription to test the UI
+        await supabase.functions.invoke('simulate-transcription', {
+          body: { callId: callToAnswer.id }
+        });
+        console.log('Transcription simulation started for call:', callToAnswer.id);
+        
+        // Also try to start real transcription
+        await supabase.functions.invoke('twilio-start-transcription', {
+          body: { callId: callToAnswer.id }
+        });
+        console.log('Real transcription started for call:', callToAnswer.id);
+      } catch (transcriptionError) {
+        console.error('Failed to start transcription:', transcriptionError);
+        // Don't fail the call answer if transcription fails
+      }
+
     } catch (error) {
       console.error('Error answering call:', error);
       toast({
@@ -129,13 +148,14 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     if (!activeCall) return;
 
     try {
-      await supabase
-        .from('calls')
-        .update({ 
-          call_status: 'completed',
-          ended_at: new Date().toISOString() 
-        })
-        .eq('id', activeCall.id);
+      // Call our edge function to properly end the Twilio call
+      const { error } = await supabase.functions.invoke('twilio-end-call', {
+        body: { callId: activeCall.id }
+      });
+
+      if (error) {
+        throw error;
+      }
 
       toast({
         title: "Call Ended",
@@ -148,7 +168,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       console.error('Error ending call:', error);
       toast({
         title: "Error",
-        description: "Failed to end call",
+        description: "Failed to end call properly",
         variant: "destructive",
       });
     }

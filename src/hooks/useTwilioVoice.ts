@@ -161,6 +161,9 @@ export const useTwilioVoice = () => {
   const hangupCall = () => {
     if (activeCall) {
       activeCall.disconnect();
+      
+      // Also trigger our backend to end the call properly
+      // This will be handled by the CallCenterLayout component
     }
   };
 
