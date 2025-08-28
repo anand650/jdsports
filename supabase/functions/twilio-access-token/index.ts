@@ -23,7 +23,7 @@ serve(async (req: Request) => {
     const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET");
     const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
-    console.log("=== TWILIO ACCESS TOKEN FUNCTION v2.0 ===");
+    console.log("=== TWILIO ACCESS TOKEN FUNCTION v2.1 ===");
     console.log("Environment variable check:");
     console.log("TWILIO_ACCOUNT_SID:", accountSid ? `✓ Present (${accountSid.length} chars)` : "✗ Missing");
     console.log("TWILIO_API_KEY:", apiKey ? `✓ Present (${apiKey.length} chars)` : "✗ Missing");
