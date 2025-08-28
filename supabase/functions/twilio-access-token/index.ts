@@ -190,15 +190,7 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log("JWT Payload:", {
-      iss: apiKey?.substring(0, 6) + "...",
-      sub: accountSid?.substring(0, 6) + "...",
-      nbf: now,
-      exp: now + ttl,
-      jti: `${apiKey?.substring(0, 6)}...-${now}`,
-      identity: identity,
-      appSid: appSid?.substring(0, 6) + "..."
-    });
+    console.log("JWT Payload structure:", JSON.stringify(payload, null, 2));
 
     // Base64url encode function
     const base64UrlEncode = (str: string) => {
