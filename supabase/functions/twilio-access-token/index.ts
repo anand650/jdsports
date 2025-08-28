@@ -228,12 +228,20 @@ serve(async (req: Request) => {
     
     const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
     
-    // Convert signature directly to base64url without corrupting binary data
+    // Convert ArrayBuffer -> base64url safely
     const signatureArray = new Uint8Array(signature);
-    const signatureBase64 = btoa(String.fromCharCode.apply(null, Array.from(signatureArray)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
+    
+    // Convert bytes to binary string safely
+    let binary = "";
+    for (let i = 0; i < signatureArray.length; i++) {
+      binary += String.fromCharCode(signatureArray[i]);
+    }
+    
+    // Encode to base64url
+    const signatureBase64 = btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, ""); // strip padding
     
     console.log("Signature (base64url):", signatureBase64.substring(0, 10) + "...");
 
