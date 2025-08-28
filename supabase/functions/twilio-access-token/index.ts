@@ -132,6 +132,11 @@ serve(async (req: Request) => {
     console.log("TWILIO_API_KEY_SECRET:", apiSecret ? "✓ Present" : "✗ Missing");
     console.log("TWILIO_TWIML_APP_SID:", appSid ? "✓ Present" : "✗ Missing");
 
+    // Log actual values (first few chars only for security)
+    console.log("Account SID starts with:", accountSid?.substring(0, 6));
+    console.log("API Key starts with:", apiKey?.substring(0, 6));
+    console.log("App SID starts with:", appSid?.substring(0, 6));
+
     if (!accountSid || !apiKey || !apiSecret || !appSid) {
       console.error("Missing Twilio credentials - function will fail");
       return new Response(
@@ -159,6 +164,16 @@ serve(async (req: Request) => {
         }
       }
     };
+
+    console.log("JWT Payload:", {
+      iss: apiKey?.substring(0, 6) + "...",
+      sub: accountSid?.substring(0, 6) + "...",
+      nbf: now,
+      exp: now + ttl,
+      jti: `${apiKey?.substring(0, 6)}...-${now}`,
+      identity: identity,
+      appSid: appSid?.substring(0, 6) + "..."
+    });
 
     // Base64url encode function
     const base64UrlEncode = (str: string) => {
