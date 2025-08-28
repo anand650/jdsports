@@ -4,6 +4,7 @@ import { ProductGrid } from './ProductGrid';
 import { ProductDetail } from './ProductDetail';
 import { Cart } from './Cart';
 import { Chatbot } from './Chatbot';
+import { KnowledgeBaseAdmin } from './KnowledgeBaseAdmin';
 import { Product, CartItem } from '@/types/ecommerce';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -237,6 +238,11 @@ export const EcommerceLayout = () => {
           />
         )}
       </main>
+
+      {/* Admin Panel - Temporary for setup */}
+      <div className="fixed bottom-6 left-6 z-40">
+        <KnowledgeBaseAdmin />
+      </div>
 
       <Chatbot />
     </div>

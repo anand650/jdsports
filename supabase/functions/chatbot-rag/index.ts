@@ -13,6 +13,28 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Helper function to generate embeddings
+async function generateEmbedding(text: string): Promise<number[]> {
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openAIApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-ada-002',
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Embedding API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -20,20 +42,106 @@ serve(async (req) => {
   }
 
   try {
-    const { message, sessionId } = await req.json();
+    const { message, sessionId, userId } = await req.json();
 
     if (!message || !sessionId) {
       throw new Error('Message and session ID are required');
     }
 
-    console.log('Processing message:', message, 'for session:', sessionId);
+    console.log('Processing message:', message, 'for session:', sessionId, 'user:', userId || 'anonymous');
 
-    // Get product context for RAG
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    // Generate embedding for the user's message for semantic search
+    const queryEmbedding = await generateEmbedding(message);
+
+    // Search knowledge base using vector similarity
+    const { data: knowledgeResults, error: knowledgeError } = await supabase
+      .rpc('search_knowledge_base', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.7,
+        match_count: 3
+      });
+
+    if (knowledgeError) {
+      console.error('Error searching knowledge base:', knowledgeError);
+    }
+
+    // Get user-specific context if user is logged in
+    let userContext = '';
+    let userOrders = '';
+    let userCart = '';
+
+    if (userId) {
+      try {
+        // Fetch user's recent orders
+        const { data: orders, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            total_amount,
+            status,
+            created_at,
+            order_items (
+              quantity,
+              price,
+              size,
+              color,
+              product:products (
+                name,
+                brand
+              )
+            )
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (orders && orders.length > 0) {
+          userOrders = orders.map(order => 
+            `Order #${order.id.slice(-8)}: £${order.total_amount} - ${order.status} - ${new Date(order.created_at).toLocaleDateString()} - Items: ${order.order_items?.map(item => `${item.quantity}x ${item.product?.name}`).join(', ')}`
+          ).join('\n');
+        }
+
+        // Fetch user's current cart
+        const { data: cartItems, error: cartError } = await supabase
+          .from('cart_items')
+          .select(`
+            quantity,
+            size,
+            color,
+            product:products (
+              name,
+              price,
+              brand
+            )
+          `)
+          .eq('user_id', userId);
+
+        if (cartItems && cartItems.length > 0) {
+          userCart = cartItems.map(item => 
+            `${item.quantity}x ${item.product?.name} (${item.size || 'No size'}, ${item.color || 'No color'}) - £${item.product?.price}`
+          ).join('\n');
+        }
+
+        userContext = `
+User Account Information:
+${userOrders ? `Recent Orders:\n${userOrders}\n` : 'No recent orders found.\n'}
+${userCart ? `Current Cart:\n${userCart}\n` : 'Cart is empty.\n'}`;
+
+      } catch (userError) {
+        console.error('Error fetching user context:', userError);
+      }
+    }
+
+    // Get general product context for recommendations
     const { data: products, error: productsError } = await supabase
       .from('products')
       .select('name, description, price, category, brand, sizes, colors')
       .eq('is_active', true)
-      .limit(10);
+      .limit(8);
 
     if (productsError) {
       console.error('Error fetching products:', productsError);
@@ -51,7 +159,11 @@ serve(async (req) => {
       console.error('Error fetching messages:', messagesError);
     }
 
-    // Build context for the AI
+    // Build comprehensive context
+    const knowledgeContext = knowledgeResults?.map(kb => 
+      `${kb.title}: ${kb.content} (Category: ${kb.category})`
+    ).join('\n\n') || '';
+
     const productContext = products?.map(p => 
       `${p.name} by ${p.brand || 'JD Sports'} - ${p.description} - £${p.price} - Category: ${p.category} - Sizes: ${p.sizes?.join(', ') || 'Various'} - Colors: ${p.colors?.join(', ') || 'Various'}`
     ).join('\n') || '';
@@ -61,42 +173,46 @@ serve(async (req) => {
     ).join('\n') || '';
 
     // Determine if escalation is needed
-    const escalationKeywords = ['complaint', 'refund', 'problem', 'issue', 'manager', 'speak to human', 'human agent', 'dissatisfied', 'angry'];
+    const escalationKeywords = ['complaint', 'refund', 'problem', 'issue', 'manager', 'speak to human', 'human agent', 'dissatisfied', 'angry', 'cancel order', 'return item'];
     const needsEscalation = escalationKeywords.some(keyword => 
       message.toLowerCase().includes(keyword)
     );
 
-    // Create AI prompt with RAG context
-    const systemPrompt = `You are a helpful customer service assistant for JD Sports, a leading sports fashion retailer. You have access to our current product catalog and should help customers with:
+    // Create enhanced AI prompt with RAG context
+    const systemPrompt = `You are a helpful customer service assistant for JD Sports, a leading sports fashion retailer. You have access to comprehensive information including knowledge base, product catalog, and user-specific data.
 
+CAPABILITIES:
 1. Product recommendations and information
 2. Size and fit guidance
-3. Order inquiries (ask for order number)
-4. General store information
-5. Returns and exchanges (365-day return policy)
+3. Order status and history inquiries
+4. Returns and exchanges (365-day return policy)
+5. General store policies and information
+6. Shopping cart assistance
 
-Available Products:
+${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}
+
+${userContext ? `${userContext}` : 'User is not logged in - cannot access order history or cart information.\n'}
+
+AVAILABLE PRODUCTS:
 ${productContext}
 
-Conversation History:
+CONVERSATION HISTORY:
 ${conversationHistory}
 
-Guidelines:
+GUIDELINES:
 - Be friendly, professional, and enthusiastic about sports fashion
-- Use the product information to make specific recommendations
-- If asked about products not in our catalog, suggest similar alternatives
-- For complex issues or complaints, acknowledge the concern and offer to escalate
-- Keep responses concise but helpful
+- Use specific information from the knowledge base when relevant
+- Reference user's order history and cart when answering questions
+- For order inquiries, use the provided order information if available
+- If user asks about orders but isn't logged in, suggest they log in
+- Use product information to make specific recommendations
 - Always mention our 365-day return policy when relevant
-- If you don't know something, be honest and offer to connect them with a specialist
+- Keep responses concise but helpful
+- If you don't have specific information, be honest and offer alternatives
 
 ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Acknowledge their concern and suggest connecting them with a human agent.' : ''}`;
 
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
-
-    // Call OpenAI API
+    // Call OpenAI API with enhanced model
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -109,7 +225,7 @@ ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Ack
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
         ],
-        max_tokens: 500,
+        max_tokens: 600,
         temperature: 0.7
       }),
     });
@@ -132,7 +248,7 @@ ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Ack
         session_id: sessionId,
         sender_type: 'user',
         content: message,
-        metadata: {}
+        metadata: { user_id: userId || null }
       });
 
     if (userMessageError) {
@@ -148,7 +264,11 @@ ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Ack
         content: aiMessage,
         metadata: { 
           escalation_suggested: needsEscalation,
-          product_context_used: products?.length || 0
+          knowledge_base_results: knowledgeResults?.length || 0,
+          product_context_used: products?.length || 0,
+          user_context_used: !!userId,
+          has_user_orders: !!userOrders,
+          has_user_cart: !!userCart
         }
       });
 
@@ -159,6 +279,12 @@ ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Ack
     return new Response(JSON.stringify({
       message: aiMessage,
       needsEscalation,
+      contextUsed: {
+        knowledgeBase: knowledgeResults?.length || 0,
+        products: products?.length || 0,
+        userOrders: userOrders ? 'yes' : 'no',
+        userCart: userCart ? 'yes' : 'no'
+      },
       success: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

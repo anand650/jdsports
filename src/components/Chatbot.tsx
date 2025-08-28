@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MessageCircle, X, Send, User, Bot, AlertTriangle } from 'lucide-react';
+import { MessageCircle, X, Send, User, Bot, AlertTriangle, Database, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessage, ChatSession } from '@/types/ecommerce';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,8 +16,10 @@ export const Chatbot = () => {
   const [session, setSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [needsEscalation, setNeedsEscalation] = useState(false);
+  const [contextUsed, setContextUsed] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     if (isOpen && !session) {
@@ -66,12 +69,13 @@ export const Chatbot = () => {
 
   const initializeSession = async () => {
     try {
-      // For demo, create anonymous session
+      // Create session with user context if available
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
           session_token: `session_${Date.now()}`,
-          status: 'active'
+          status: 'active',
+          user_id: user?.id || null
         })
         .select()
         .single();
@@ -79,13 +83,17 @@ export const Chatbot = () => {
       if (error) throw error;
       setSession(data as ChatSession);
 
-      // Add welcome message
+      // Add personalized welcome message
+      const welcomeContent = user?.id 
+        ? `Hi ${userProfile?.full_name || 'there'}! I'm your JD Sports assistant with access to your order history and cart. I can help you find products, check your orders, track shipments, or answer any questions about our store. How can I help you today?`
+        : "Hi! I'm your JD Sports assistant. I can help you find products or answer questions about our store. For personalized help with orders and your cart, please log in. How can I help you today?";
+
       const welcomeMessage: ChatMessage = {
         id: 'welcome',
         session_id: data.id,
         sender_type: 'ai',
-        content: "Hi! I'm your JD Sports assistant. I can help you find products, check your orders, or answer any questions about our store. How can I help you today?",
-        metadata: {},
+        content: welcomeContent,
+        metadata: { is_welcome: true, user_authenticated: !!user?.id },
         created_at: new Date().toISOString()
       };
       setMessages([welcomeMessage]);
@@ -135,11 +143,12 @@ export const Chatbot = () => {
 
   const simulateAIResponse = async (userMessage: ChatMessage) => {
     try {
-      // Call our RAG chatbot endpoint
+      // Call our enhanced RAG chatbot endpoint with user context
       const { data, error } = await supabase.functions.invoke('chatbot-rag', {
         body: {
           message: userMessage.content,
-          sessionId: session!.id
+          sessionId: session!.id,
+          userId: user?.id || null
         }
       });
 
@@ -153,8 +162,9 @@ export const Chatbot = () => {
         throw new Error(response.error || 'Failed to get AI response');
       }
 
-      // Set escalation flag based on AI response
+      // Set escalation flag and context info based on AI response
       setNeedsEscalation(response.needsEscalation);
+      setContextUsed(response.contextUsed);
       
       // The AI response will be handled by real-time subscription
       // Just add it locally with immediate UI update to prevent delay
@@ -165,7 +175,8 @@ export const Chatbot = () => {
         content: response.message,
         metadata: { 
           escalation_suggested: response.needsEscalation,
-          from_rag: true 
+          from_rag: true,
+          context_used: response.contextUsed
         },
         created_at: new Date().toISOString()
       };
@@ -251,10 +262,38 @@ export const Chatbot = () => {
       {isOpen && (
         <Card className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 max-h-[500px] flex flex-col shadow-2xl border">
           <CardHeader className="flex-shrink-0 flex flex-row items-center justify-between space-y-0 pb-2 px-4 py-3 border-b">
-            <CardTitle className="text-lg">JD Sports Assistant</CardTitle>
+            <div className="flex items-center space-x-2">
+              <CardTitle className="text-lg">JD Sports Assistant</CardTitle>
+              {user?.id && (
+                <Badge variant="outline" className="text-xs">
+                  <User className="h-3 w-3 mr-1" />
+                  Logged In
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center space-x-2">
               {session?.status === 'escalated' && (
                 <Badge variant="secondary">Agent Requested</Badge>
+              )}
+              {contextUsed && (
+                <div className="flex space-x-1">
+                  {contextUsed.knowledgeBase > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      <Database className="h-3 w-3 mr-1" />
+                      KB: {contextUsed.knowledgeBase}
+                    </Badge>
+                  )}
+                  {contextUsed.userOrders === 'yes' && (
+                    <Badge variant="outline" className="text-xs">
+                      Orders ✓
+                    </Badge>
+                  )}
+                  {contextUsed.userCart === 'yes' && (
+                    <Badge variant="outline" className="text-xs">
+                      <ShoppingCart className="h-3 w-3" />
+                    </Badge>
+                  )}
+                </div>
               )}
               <Button
                 variant="ghost"
