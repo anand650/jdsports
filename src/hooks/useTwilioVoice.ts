@@ -10,6 +10,7 @@ export const useTwilioVoice = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
   const [isDeviceReady, setIsDeviceReady] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const deviceRef = useRef<Device | null>(null);
   const { toast } = useToast();
 
@@ -18,14 +19,33 @@ export const useTwilioVoice = () => {
     
     return () => {
       if (deviceRef.current) {
+        console.log('Cleaning up Twilio device...');
         deviceRef.current.destroy();
+        deviceRef.current = null;
       }
     };
   }, []);
 
   const initializeDevice = async () => {
+    // Prevent multiple initialization attempts
+    if (isInitializing) {
+      console.log('Device initialization already in progress, skipping...');
+      return;
+    }
+
+    setIsInitializing(true);
+
     try {
       console.log('Initializing Twilio device...');
+      
+      // Clean up existing device first
+      if (deviceRef.current) {
+        console.log('Destroying existing device...');
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+        setDevice(null);
+        setIsDeviceReady(false);
+      }
       
       // Get access token from Supabase edge function
       const { data, error } = await supabase.functions.invoke('twilio-access-token', {
@@ -66,14 +86,6 @@ export const useTwilioVoice = () => {
       twilioDevice.on('error', (error) => {
         console.error('Twilio device error:', error);
         
-        // Add specific handling for connection errors
-        if (error.code === 31000 || error.code === 53001) {
-          console.log('WebSocket connection lost, attempting to reinitialize...');
-          setTimeout(() => {
-            initializeDevice();
-          }, 5000);
-        }
-        
         toast({
           title: "Voice Error",
           description: error.message,
@@ -112,6 +124,8 @@ export const useTwilioVoice = () => {
         description: `Failed to initialize voice device: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsInitializing(false);
     }
   };
 
