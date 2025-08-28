@@ -3,13 +3,15 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
 import { TranscriptPanel } from './TranscriptPanel';
 import { SuggestionsPanel } from './SuggestionsPanel';
+import { CustomerInfoPanel } from './CustomerInfoPanel';
 import { useRealtimeTranscripts, useRealtimeSuggestions } from '@/hooks/useRealtimeSubscriptions';
-import { Call } from '@/types/call-center';
+import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
 export const CallCenterLayout = () => {
   const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const { toast } = useToast();
   
   // Real-time data subscriptions
@@ -107,14 +109,24 @@ export const CallCenterLayout = () => {
         {/* Main Content Area */}
         <main className="flex-1 pt-12">
           <div className="h-[calc(100vh-3rem)] p-4 flex flex-col gap-4">
-            {/* Transcript Panel - Top Half */}
-            <div className="flex-1">
-              <TranscriptPanel transcripts={transcripts} />
-            </div>
-            
-            {/* Suggestions Panel - Bottom Half */}
-            <div className="flex-1">
-              <SuggestionsPanel suggestions={suggestions} />
+            <div className="flex gap-4 h-full">
+              {/* Left Side - Transcript and Suggestions */}
+              <div className="flex-1 flex flex-col gap-4">
+                <div className="flex-1">
+                  <TranscriptPanel transcripts={transcripts} />
+                </div>
+                <div className="flex-1">
+                  <SuggestionsPanel suggestions={suggestions} />
+                </div>
+              </div>
+              
+              {/* Right Side - Customer Info */}
+              <div className="w-80">
+                <CustomerInfoPanel 
+                  customerProfile={customerProfile}
+                  activeCall={activeCall}
+                />
+              </div>
             </div>
           </div>
         </main>

@@ -35,30 +35,90 @@ export type Database = {
         }
         Relationships: []
       }
+      call_recordings: {
+        Row: {
+          call_id: string
+          created_at: string
+          duration: number | null
+          file_size: number | null
+          id: string
+          recording_url: string
+          twilio_recording_sid: string | null
+        }
+        Insert: {
+          call_id: string
+          created_at?: string
+          duration?: number | null
+          file_size?: number | null
+          id?: string
+          recording_url: string
+          twilio_recording_sid?: string | null
+        }
+        Update: {
+          call_id?: string
+          created_at?: string
+          duration?: number | null
+          file_size?: number | null
+          id?: string
+          recording_url?: string
+          twilio_recording_sid?: string | null
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           agent_id: string | null
+          call_direction: string | null
+          call_duration: number | null
+          call_status: string | null
+          caller_city: string | null
+          caller_country: string | null
+          caller_state: string | null
           created_at: string
           customer_number: string
           ended_at: string | null
           id: string
+          recording_duration: number | null
+          recording_url: string | null
           started_at: string
+          twilio_call_sid: string | null
+          twilio_conference_sid: string | null
         }
         Insert: {
           agent_id?: string | null
+          call_direction?: string | null
+          call_duration?: number | null
+          call_status?: string | null
+          caller_city?: string | null
+          caller_country?: string | null
+          caller_state?: string | null
           created_at?: string
           customer_number: string
           ended_at?: string | null
           id?: string
+          recording_duration?: number | null
+          recording_url?: string | null
           started_at?: string
+          twilio_call_sid?: string | null
+          twilio_conference_sid?: string | null
         }
         Update: {
           agent_id?: string | null
+          call_direction?: string | null
+          call_duration?: number | null
+          call_status?: string | null
+          caller_city?: string | null
+          caller_country?: string | null
+          caller_state?: string | null
           created_at?: string
           customer_number?: string
           ended_at?: string | null
           id?: string
+          recording_duration?: number | null
+          recording_url?: string | null
           started_at?: string
+          twilio_call_sid?: string | null
+          twilio_conference_sid?: string | null
         }
         Relationships: [
           {
@@ -207,6 +267,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customer_profiles: {
+        Row: {
+          call_history_count: number | null
+          created_at: string
+          customer_notes: string | null
+          email: string | null
+          id: string
+          last_interaction_at: string | null
+          name: string | null
+          phone_number: string
+          preferred_language: string | null
+          tags: string[] | null
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          call_history_count?: number | null
+          created_at?: string
+          customer_notes?: string | null
+          email?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          name?: string | null
+          phone_number: string
+          preferred_language?: string | null
+          tags?: string[] | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          call_history_count?: number | null
+          created_at?: string
+          customer_notes?: string | null
+          email?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          name?: string | null
+          phone_number?: string
+          preferred_language?: string | null
+          tags?: string[] | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       knowledge_base: {
         Row: {
