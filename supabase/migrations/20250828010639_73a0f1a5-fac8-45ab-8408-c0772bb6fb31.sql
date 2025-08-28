@@ -1,0 +1,2 @@
+-- Remove the existing dummy users that don't have corresponding auth entries
+DELETE FROM public.users WHERE email IN ('customer1@test.com', 'customer2@test.com', 'agent1@test.com', 'agent2@test.com');

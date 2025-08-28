@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
+import { createDemoUsers } from '@/utils/createDemoUsers';
 
 export const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -27,6 +28,11 @@ export const Auth = () => {
   const { signIn, signUp, user, userProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Create demo users on component mount
+  useEffect(() => {
+    createDemoUsers();
+  }, []);
 
   useEffect(() => {
     if (user && userProfile) {
