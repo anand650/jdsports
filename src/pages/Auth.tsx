@@ -148,6 +148,12 @@ export const Auth = () => {
                 </Button>
               </form>
               
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Demo Accounts:</p>
+                <p className="text-xs text-muted-foreground mb-1">Customer: customer1@test.com / password123</p>
+                <p className="text-xs text-muted-foreground">Agent: agent1@test.com / password123</p>
+              </div>
+              
             </TabsContent>
             
             <TabsContent value="signup">
