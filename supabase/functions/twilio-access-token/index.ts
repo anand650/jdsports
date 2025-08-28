@@ -22,7 +22,7 @@ serve(async (req: Request) => {
     const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET");
     const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
-    console.log("Credential check:");
+    console.log("Credential check (updated):");
     console.log("TWILIO_ACCOUNT_SID:", accountSid ? "✓ Present" : "✗ Missing");
     console.log("TWILIO_API_KEY:", apiKey ? "✓ Present" : "✗ Missing");
     console.log("TWILIO_API_KEY_SECRET:", apiSecret ? "✓ Present" : "✗ Missing");
