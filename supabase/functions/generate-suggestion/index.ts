@@ -25,6 +25,43 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Generate embeddings for the customer message to search knowledge base
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const generateEmbedding = async (text: string): Promise<number[]> => {
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-small',
+          input: text,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI embeddings API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.data[0].embedding;
+    };
+
+    // Generate embedding for the customer message
+    const messageEmbedding = await generateEmbedding(customerMessage);
+
+    // Search knowledge base for relevant information
+    const { data: knowledgeResults } = await supabase.rpc('search_knowledge_base', {
+      query_embedding: messageEmbedding,
+      match_threshold: 0.7,
+      match_count: 3
+    });
+
     // Get recent conversation context
     const { data: recentTranscripts } = await supabase
       .from('transcripts')
@@ -67,22 +104,30 @@ serve(async (req) => {
         `Tags: ${profile.tags?.join(', ') || 'None'}`;
     }
 
-    // Generate AI suggestion using OpenAI
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+    // Build knowledge base context
+    let knowledgeContext = '';
+    if (knowledgeResults && knowledgeResults.length > 0) {
+      knowledgeContext = knowledgeResults
+        .map(result => `${result.title}: ${result.content}`)
+        .join('\n\n');
     }
 
-    const systemPrompt = `You are an AI assistant helping customer service agents. Based on the customer's message and conversation history, provide a helpful, concise suggestion for how the agent should respond. Keep suggestions under 50 words and focus on being helpful and professional.
+    // Generate AI suggestion using OpenAI
+    const systemPrompt = `You are an AI assistant helping customer service agents resolve customer issues. Based on the customer's message, conversation history, and relevant knowledge base information, provide a helpful, concise suggestion for how the agent should respond.
 
-Customer Context: ${customerContext}
+Keep suggestions under 50 words and focus on being helpful, professional, and specific to the customer's issue.
+
+${knowledgeContext ? `Knowledge Base Information:
+${knowledgeContext}
+
+` : ''}Customer Context: ${customerContext}
 
 Recent Conversation:
 ${conversationContext}
 
 Latest Customer Message: ${customerMessage}
 
-Provide a brief, actionable suggestion for the agent:`;
+Provide a brief, actionable suggestion for the agent based on the available information:`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
