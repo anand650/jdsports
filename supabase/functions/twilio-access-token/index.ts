@@ -227,7 +227,13 @@ serve(async (req: Request) => {
     );
     
     const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-    const signatureBase64 = base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)));
+    
+    // Convert signature directly to base64url without corrupting binary data
+    const signatureArray = new Uint8Array(signature);
+    const signatureBase64 = btoa(String.fromCharCode.apply(null, Array.from(signatureArray)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
     
     console.log("Signature (base64url):", signatureBase64.substring(0, 10) + "...");
 
