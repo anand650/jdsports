@@ -148,12 +148,13 @@ serve(async (req: Request) => {
     const identity = "agent";
     const now = Math.floor(Date.now() / 1000);
     const ttl = 3600; // 1 hour
+    const timeBuffer = 30; // 30 second buffer for clock skew
 
     // Create JWT payload for Twilio Voice
     const payload = {
       iss: apiKey,
       sub: accountSid,
-      nbf: now,
+      nbf: now - timeBuffer, // Add buffer to account for clock skew
       exp: now + ttl,
       jti: `${apiKey}-${now}`,
       grants: {
