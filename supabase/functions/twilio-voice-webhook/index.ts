@@ -94,17 +94,27 @@ serve(async (req) => {
           .update({ agent_id: availableAgents[0].id })
           .eq('twilio_call_sid', CallSid as string);
 
-        // Generate TwiML to connect to agent
+        // Store conference SID for agent connection
+        await supabase
+          .from('calls')
+          .update({ 
+            agent_id: availableAgents[0].id,
+            twilio_conference_sid: CallSid as string,
+            call_status: 'ringing'
+          })
+          .eq('twilio_call_sid', CallSid as string);
+
+        // Generate TwiML to put caller in conference and wait for agent
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Say voice="alice">Please hold while we connect you to an agent.</Say>
           <Dial>
             <Conference 
-              startConferenceOnEnter="true"
-              endConferenceOnExit="false"
-              record="record-from-start"
-              recordingStatusCallback="${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-call-status"
-              statusCallback="${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-call-status"
+              startConferenceOnEnter="false"
+              endConferenceOnExit="true"
+              waitUrl="http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient"
+              statusCallback="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-call-status"
+              statusCallbackEvent="start end join leave mute hold"
             >${CallSid}</Conference>
           </Dial>
         </Response>`;

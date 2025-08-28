@@ -42,9 +42,41 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
   };
 
   const handleAnswer = async () => {
-    setIsConnected(true);
-    setCallDuration(0);
-    onAnswerCall();
+    if (activeCall && activeCall.twilio_conference_sid) {
+      // Connect agent to the conference
+      try {
+        const response = await supabase.functions.invoke('twilio-call-controls', {
+          body: {
+            action: 'connect_agent',
+            conferenceId: activeCall.twilio_conference_sid
+          }
+        });
+        
+        if (response.error) {
+          console.error('Error connecting agent:', response.error);
+          toast({
+            title: "Error",
+            description: "Failed to connect to call",
+            variant: "destructive",
+          });
+        } else {
+          setIsConnected(true);
+          setCallDuration(0);
+          onAnswerCall();
+        }
+      } catch (error) {
+        console.error('Error connecting to conference:', error);
+        toast({
+          title: "Error",
+          description: "Failed to connect to call",
+          variant: "destructive",
+        });
+      }
+    } else {
+      setIsConnected(true);
+      setCallDuration(0);
+      onAnswerCall();
+    }
   };
 
   const handleEnd = async () => {

@@ -53,6 +53,9 @@ verify_jwt = false
 [functions.twilio-voice-webhook]
 verify_jwt = false
 
+[functions.twilio-agent-connect]
+verify_jwt = false
+
 [functions.twilio-audio-stream]
 verify_jwt = false
 
