@@ -154,8 +154,8 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
   };
 
   return (
-    <Card className={`h-full bg-sidebar border-sidebar-border ${className}`}>
-      <CardHeader className="pb-4">
+    <Card className={`h-[600px] max-h-[70vh] bg-sidebar border-sidebar-border flex flex-col ${className}`}>
+      <CardHeader className="pb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sidebar-foreground flex items-center gap-2">
             <Phone className="h-5 w-5" />
@@ -208,7 +208,7 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
         </div>
       </CardHeader>
       
-      <CardContent className="p-0 h-[calc(100%-200px)]">
+      <CardContent className="p-0 flex-1 min-h-0">
         <ScrollArea className="h-full px-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
