@@ -89,8 +89,8 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
   };
 
   return (
-    <Card className="h-full bg-sidebar border-sidebar-border">
-      <CardHeader className="pb-4">
+    <Card className="h-[400px] max-h-[50vh] bg-sidebar border-sidebar-border flex flex-col">
+      <CardHeader className="pb-4 flex-shrink-0">
         <CardTitle className="text-sidebar-foreground flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
           Live Transcription
@@ -101,7 +101,7 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 h-[calc(100%-80px)]">
+      <CardContent className="p-0 flex-1 min-h-0">
         {!callId ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
             <Headphones className="h-12 w-12 text-sidebar-primary mb-4" />
