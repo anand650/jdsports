@@ -126,8 +126,14 @@ serve(async (req: Request) => {
     const apiSecret = Deno.env.get("TWILIO_API_KEY_SECRET");
     const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
+    console.log("Credential check:");
+    console.log("TWILIO_ACCOUNT_SID:", accountSid ? "✓ Present" : "✗ Missing");
+    console.log("TWILIO_API_KEY:", apiKey ? "✓ Present" : "✗ Missing");
+    console.log("TWILIO_API_KEY_SECRET:", apiSecret ? "✓ Present" : "✗ Missing");
+    console.log("TWILIO_TWIML_APP_SID:", appSid ? "✓ Present" : "✗ Missing");
+
     if (!accountSid || !apiKey || !apiSecret || !appSid) {
-      console.error("Missing Twilio credentials");
+      console.error("Missing Twilio credentials - function will fail");
       return new Response(
         JSON.stringify({ error: "Twilio credentials not configured" }),
         { status: 500, headers: corsHeaders }
