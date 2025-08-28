@@ -106,8 +106,8 @@
 // });
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { jwt } from "npm:twilio@5.8.1";
 
-// Set allowed origins — you can lock this down to your domain
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -145,27 +145,6 @@ serve(async (req: Request) => {
       );
     }
 
-    const identity = "agent";
-    const now = Math.floor(Date.now() / 1000);
-    const ttl = 3600; // 1 hour
-    const timeBuffer = 30; // 30 second buffer for clock skew
-
-    // Create JWT payload for Twilio Voice
-    const payload = {
-      iss: apiKey,
-      sub: accountSid,
-      nbf: now - timeBuffer, // Add buffer to account for clock skew
-      exp: now + ttl,
-      jti: `${apiKey}-${now}`,
-      grants: {
-        identity: identity,
-        voice: {
-          incoming: { allow: true },
-          outgoing: { application_sid: appSid }
-        }
-      }
-    };
-
     // Validate credential formats
     if (!accountSid?.startsWith('AC')) {
       console.error("Invalid Account SID format - should start with 'AC'");
@@ -191,72 +170,41 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log("JWT Payload structure:", JSON.stringify(payload, null, 2));
+    const identity = "agent";
 
-    // Base64url encode function
-    const base64UrlEncode = (str: string) => {
-      return btoa(str)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-    };
+    console.log("Using Twilio's official AccessToken library...");
 
-    // Create JWT header
-    const header = {
-      alg: "HS256",
-      typ: "JWT"
-    };
+    // Create AccessToken using Twilio's official library
+    const accessToken = new jwt.AccessToken(accountSid, apiKey, apiSecret, {
+      identity: identity,
+      ttl: 3600 // 1 hour
+    });
 
-    // Encode header and payload
-    const headerEncoded = base64UrlEncode(JSON.stringify(header));
-    const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
-    
-    console.log("JWT Header (encoded):", headerEncoded);
-    console.log("JWT Payload (encoded):", payloadEncoded);
-    
-    // Create HMAC-SHA256 signature
-    const message = `${headerEncoded}.${payloadEncoded}`;
-    console.log("Message to sign:", message);
-    console.log("API Secret length:", apiSecret?.length);
-    
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(apiSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    
-    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-    
-    // Convert ArrayBuffer -> base64url safely
-    const signatureArray = new Uint8Array(signature);
-    
-    // Convert bytes to binary string safely
-    let binary = "";
-    for (let i = 0; i < signatureArray.length; i++) {
-      binary += String.fromCharCode(signatureArray[i]);
-    }
-    
-    // Encode to base64url
-    const signatureBase64 = btoa(binary)
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, ""); // strip padding
-    
-    console.log("Signature (base64url):", signatureBase64.substring(0, 10) + "...");
+    // Create VoiceGrant for voice calls
+    const voiceGrant = new jwt.AccessToken.VoiceGrant({
+      incomingAllow: true,
+      outgoingApplicationSid: appSid
+    });
 
-    const token = `${message}.${signatureBase64}`;
-    console.log("Complete JWT length:", token.length);
+    // Add the voice grant to the token
+    accessToken.addGrant(voiceGrant);
+
+    // Generate the JWT token using Twilio's library
+    const token = accessToken.toJwt();
+
+    console.log("✓ JWT token generated successfully using Twilio's AccessToken library");
+    console.log("Token length:", token.length);
+    console.log("Identity:", identity);
 
     return new Response(
       JSON.stringify({ token, identity }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (err) {
     console.error("Error generating Twilio token:", err);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "Internal server error", details: err.message }),
       { status: 500, headers: corsHeaders }
     );
   }
