@@ -25,13 +25,26 @@ export const useTwilioVoice = () => {
 
   const initializeDevice = async () => {
     try {
+      console.log('Initializing Twilio device...');
+      
       // Get access token from Supabase edge function
       const { data, error } = await supabase.functions.invoke('twilio-access-token', {
         body: { identity: 'agent' }
       });
 
-      if (error) throw error;
+      console.log('Token response:', { data, error });
 
+      if (error) {
+        console.error('Token error:', error);
+        throw error;
+      }
+
+      if (!data?.token) {
+        throw new Error('No token received');
+      }
+
+      console.log('Creating Twilio device with token...');
+      
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
         sounds: {
@@ -75,7 +88,10 @@ export const useTwilioVoice = () => {
         setIsDeviceReady(false);
       });
 
+      console.log('Registering device...');
       await twilioDevice.register();
+      console.log('Device registration complete');
+      
       setDevice(twilioDevice);
       deviceRef.current = twilioDevice;
 
@@ -83,7 +99,7 @@ export const useTwilioVoice = () => {
       console.error('Error initializing Twilio device:', error);
       toast({
         title: "Initialization Error",
-        description: "Failed to initialize voice device",
+        description: `Failed to initialize voice device: ${error.message}`,
         variant: "destructive",
       });
     }

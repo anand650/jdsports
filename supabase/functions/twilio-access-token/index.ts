@@ -14,30 +14,27 @@ serve(async (req) => {
   try {
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const apiKeySid = Deno.env.get('TWILIO_API_KEY_SID') || accountSid;
-    const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET') || authToken;
+    
+    console.log('Account SID:', accountSid ? 'Set' : 'Missing');
+    console.log('Auth Token:', authToken ? 'Set' : 'Missing');
     
     if (!accountSid || !authToken) {
       throw new Error('Twilio credentials not configured');
     }
 
     const { identity = 'agent' } = await req.json();
+    console.log('Generating token for identity:', identity);
 
-    // Create JWT token for Twilio Voice SDK
-    const header = {
-      "cty": "twilio-fpa;v=1",
-      "typ": "JWT",
-      "alg": "HS256"
-    };
-
+    // Use a simpler approach - create the token manually
     const now = Math.floor(Date.now() / 1000);
+    const ttl = 3600; // 1 hour
+
     const payload = {
-      "iss": apiKeySid,
+      "iss": accountSid,
       "sub": accountSid,
       "nbf": now,
-      "exp": now + 3600, // 1 hour expiration
-      "jti": `${apiKeySid}-${now}`,
-      "aud": "twilio",
+      "exp": now + ttl,
+      "jti": `${accountSid}-${now}`,
       "grants": {
         "voice": {
           "incoming": {
@@ -50,7 +47,14 @@ serve(async (req) => {
       }
     };
 
-    // Simple JWT creation (for production, use a proper JWT library)
+    // Create JWT manually using Twilio's format
+    const header = {
+      "cty": "twilio-fpa;v=1",
+      "typ": "JWT",
+      "alg": "HS256"
+    };
+
+    // Base64url encode
     const base64UrlEncode = (obj: any) => {
       return btoa(JSON.stringify(obj))
         .replace(/\+/g, '-')
@@ -61,28 +65,31 @@ serve(async (req) => {
     const headerEncoded = base64UrlEncode(header);
     const payloadEncoded = base64UrlEncode(payload);
     
-    // Create signature
+    // Create HMAC signature
     const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
+    const data = encoder.encode(`${headerEncoded}.${payloadEncoded}`);
+    const key = encoder.encode(authToken);
+    
+    const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(apiKeySecret),
+      key,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
     );
     
-    const signature = await crypto.subtle.sign(
-      'HMAC',
-      key,
-      encoder.encode(`${headerEncoded}.${payloadEncoded}`)
-    );
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
+    const signatureArray = new Uint8Array(signature);
     
-    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    // Convert signature to base64url
+    const signatureBase64 = btoa(String.fromCharCode(...signatureArray))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=/g, '');
 
     const token = `${headerEncoded}.${payloadEncoded}.${signatureBase64}`;
+    
+    console.log('Token generated successfully');
 
     return new Response(
       JSON.stringify({ 
