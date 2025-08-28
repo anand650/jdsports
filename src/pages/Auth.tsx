@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
-import { createDemoUsers } from '@/utils/createDemoUsers';
+
 
 export const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +29,6 @@ export const Auth = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Create demo users on component mount
-  useEffect(() => {
-    createDemoUsers();
-  }, []);
 
   useEffect(() => {
     if (user && userProfile) {
@@ -152,11 +148,6 @@ export const Auth = () => {
                 </Button>
               </form>
               
-              <div className="mt-4 p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">Demo Accounts:</p>
-                <p className="text-xs text-muted-foreground mb-1">Customer: customer1@test.com / password123</p>
-                <p className="text-xs text-muted-foreground">Agent: agent1@test.com / password123</p>
-              </div>
             </TabsContent>
             
             <TabsContent value="signup">
