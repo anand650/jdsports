@@ -105,52 +105,57 @@
 //   }
 // });
 
-// supabase/functions/twilio-access-token/index.ts
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import twilio from "https://esm.sh/twilio@4.20.0";
 
+// Set allowed origins — you can lock this down to your domain
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
 serve(async (req: Request) => {
+  // Handle browser preflight (CORS check)
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const apiKey = Deno.env.get("TWILIO_API_KEY");
     const apiSecret = Deno.env.get("TWILIO_API_SECRET");
+    const appSid = Deno.env.get("TWILIO_TWIML_APP_SID");
 
-    if (!accountSid || !apiKey || !apiSecret) {
-      console.error("Twilio credentials missing");
+    if (!accountSid || !apiKey || !apiSecret || !appSid) {
+      console.error("Missing Twilio credentials");
       return new Response(
         JSON.stringify({ error: "Twilio credentials not configured" }),
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
     const { AccessToken } = twilio.jwt;
     const { VoiceGrant } = AccessToken;
 
-    // identity = the user connecting (can be agent, customer, etc.)
     const identity = "agent";
 
-    // Create an access token
-    const token = new AccessToken(accountSid, apiKey, apiSecret, {
-      identity,
-    });
-
-    // Grant voice permissions
+    const token = new AccessToken(accountSid, apiKey, apiSecret, { identity });
     const voiceGrant = new VoiceGrant({
-      outgoingApplicationSid: Deno.env.get("TWILIO_TWIML_APP_SID"),
+      outgoingApplicationSid: appSid,
       incomingAllow: true,
     });
-
     token.addGrant(voiceGrant);
 
-    // Respond with JWT
     return new Response(
       JSON.stringify({ token: token.toJwt(), identity }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("Error generating Twilio token:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({ error: "Internal server error" }),
+      { status: 500, headers: corsHeaders }
+    );
   }
 });
