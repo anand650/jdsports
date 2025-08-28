@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Phone, PhoneOff, Mic, MicOff, Pause, Play } from 'lucide-react';
 import { Call } from '@/types/call-center';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 interface CallPanelProps {
   activeCall: Call | null;
@@ -13,12 +12,21 @@ interface CallPanelProps {
   onEndCall: () => void;
 }
 
-export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProps) => {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isOnHold, setIsOnHold] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallPanelProps) => {
   const [callDuration, setCallDuration] = useState(0);
-  const { toast } = useToast();
+  
+  const {
+    activeCall: twilioCall,
+    isConnected,
+    isMuted,
+    isOnHold,
+    isDeviceReady,
+    answerCall,
+    rejectCall,
+    hangupCall,
+    toggleMute,
+    toggleHold,
+  } = useTwilioVoice();
 
   // Timer for call duration
   useEffect(() => {
@@ -28,6 +36,8 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
       interval = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
+    } else {
+      setCallDuration(0);
     }
     
     return () => {
@@ -41,106 +51,34 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleAnswer = async () => {
-    if (activeCall) {
-      setIsConnected(true);
-      setCallDuration(0);
-      onAnswerCall();
-      
-      // Update call status to in-progress in database
-      try {
-        await supabase
-          .from('calls')
-          .update({ call_status: 'in-progress' })
-          .eq('id', activeCall.id);
-      } catch (error) {
-        console.error('Error updating call status:', error);
-      }
-    }
+  const handleAnswer = () => {
+    answerCall();
+    onAnswerCall();
   };
 
-  const handleEnd = async () => {
-    if (activeCall?.twilio_call_sid) {
-      try {
-        await supabase.functions.invoke('twilio-end-call', {
-          body: {
-            callSid: activeCall.twilio_call_sid
-          }
-        });
-        
-        toast({
-          title: "Call Ended",
-          description: "Call has been terminated successfully",
-        });
-      } catch (error) {
-        console.error('Error ending call:', error);
-        toast({
-          title: "Error", 
-          description: "Failed to end call properly",
-          variant: "destructive",
-        });
-      }
-    }
-    
-    setIsConnected(false);
-    setIsMuted(false);
-    setIsOnHold(false);
-    setCallDuration(0);
+  const handleEnd = () => {
+    hangupCall();
     onEndCall();
   };
 
-  const toggleMute = async () => {
-    if (!activeCall?.twilio_conference_sid) return;
-    
-    try {
-      await supabase.functions.invoke('twilio-call-controls', {
-        body: {
-          action: isMuted ? 'unmute' : 'mute',
-          conferenceSid: activeCall.twilio_conference_sid,
-          participantSid: 'agent' // You'll need to track the actual participant SID
-        }
-      });
-      
-      setIsMuted(!isMuted);
-      toast({
-        title: isMuted ? "Unmuted" : "Muted",
-        description: `Call has been ${isMuted ? 'unmuted' : 'muted'}`,
-      });
-    } catch (error) {
-      console.error('Error toggling mute:', error);
-      toast({
-        title: "Error",
-        description: "Failed to toggle mute",
-        variant: "destructive",
-      });
-    }
+  const handleReject = () => {
+    rejectCall();
+    onEndCall();
   };
 
-  const toggleHold = async () => {
-    if (!activeCall?.twilio_conference_sid) return;
-    
-    try {
-      await supabase.functions.invoke('twilio-call-controls', {
-        body: {
-          action: isOnHold ? 'unhold' : 'hold',
-          conferenceSid: activeCall.twilio_conference_sid,
-          participantSid: 'agent'
-        }
-      });
-      
-      setIsOnHold(!isOnHold);
-      toast({
-        title: isOnHold ? "Resumed" : "On Hold",
-        description: `Call has been ${isOnHold ? 'resumed' : 'put on hold'}`,
-      });
-    } catch (error) {
-      console.error('Error toggling hold:', error);
-      toast({
-        title: "Error",
-        description: "Failed to toggle hold",
-        variant: "destructive",
-      });
-    }
+  const getCallStatus = () => {
+    if (!isDeviceReady) return "Initializing...";
+    if (twilioCall && !isConnected) return "Incoming";
+    if (isConnected) return "Connected";
+    if (dbCall && !twilioCall) return "Waiting";
+    return "Ready";
+  };
+
+  const getStatusBadgeVariant = () => {
+    if (!isDeviceReady) return "secondary";
+    if (isConnected) return "default";
+    if (twilioCall || dbCall) return "destructive";
+    return "secondary";
   };
 
   return (
@@ -148,22 +86,20 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
       <CardHeader className="pb-4">
         <CardTitle className="text-sidebar-foreground flex items-center justify-between">
           Call Control
-          {activeCall && (
-            <Badge variant={isConnected ? "default" : "secondary"}>
-              {isConnected ? "Connected" : "Incoming"}
-            </Badge>
-          )}
+          <Badge variant={getStatusBadgeVariant()}>
+            {getCallStatus()}
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {activeCall ? (
+        {(dbCall || twilioCall) ? (
           <>
             <div className="bg-sidebar-accent p-4 rounded-lg">
               <p className="text-sm font-medium text-sidebar-accent-foreground">
                 Customer Number
               </p>
               <p className="text-lg font-mono text-sidebar-foreground">
-                {activeCall.customer_number}
+                {dbCall?.customer_number || 'Unknown'}
               </p>
             </div>
             
@@ -177,15 +113,24 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
             </div>
 
             <div className="flex flex-col gap-2">
-              {!isConnected ? (
-                <Button 
-                  onClick={handleAnswer} 
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Phone className="mr-2 h-4 w-4" />
-                  Answer Call
-                </Button>
-              ) : (
+              {!isConnected && twilioCall ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    onClick={handleAnswer} 
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Phone className="mr-2 h-4 w-4" />
+                    Answer
+                  </Button>
+                  <Button 
+                    onClick={handleReject} 
+                    variant="destructive"
+                  >
+                    <PhoneOff className="mr-2 h-4 w-4" />
+                    Decline
+                  </Button>
+                </div>
+              ) : isConnected ? (
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <Button 
@@ -222,17 +167,29 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
                     End Call
                   </Button>
                 </>
-              )}
+              ) : dbCall && !twilioCall ? (
+                <Button 
+                  onClick={handleAnswer} 
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={!isDeviceReady}
+                >
+                  <Phone className="mr-2 h-4 w-4" />
+                  {isDeviceReady ? "Answer Call" : "Initializing..."}
+                </Button>
+              ) : null}
             </div>
           </>
         ) : (
           <div className="text-center py-8">
             <Phone className="mx-auto h-12 w-12 text-sidebar-primary mb-4" />
             <p className="text-sidebar-foreground font-medium">
-              No Active Call
+              {isDeviceReady ? "Ready for Calls" : "Initializing Voice..."}
             </p>
             <p className="text-sm text-sidebar-accent-foreground mt-2">
-              Waiting for incoming calls from Twilio
+              {isDeviceReady 
+                ? "Waiting for incoming calls" 
+                : "Setting up Twilio voice device"
+              }
             </p>
           </div>
         )}
