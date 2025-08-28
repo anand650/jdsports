@@ -165,6 +165,31 @@ serve(async (req: Request) => {
       }
     };
 
+    // Validate credential formats
+    if (!accountSid?.startsWith('AC')) {
+      console.error("Invalid Account SID format - should start with 'AC'");
+      return new Response(
+        JSON.stringify({ error: "Invalid Account SID format" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+    
+    if (!apiKey?.startsWith('SK')) {
+      console.error("Invalid API Key format - should start with 'SK'");
+      return new Response(
+        JSON.stringify({ error: "Invalid API Key format" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+    
+    if (!appSid?.startsWith('AP')) {
+      console.error("Invalid TwiML App SID format - should start with 'AP'");
+      return new Response(
+        JSON.stringify({ error: "Invalid TwiML App SID format" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     console.log("JWT Payload:", {
       iss: apiKey?.substring(0, 6) + "...",
       sub: accountSid?.substring(0, 6) + "...",
@@ -193,8 +218,14 @@ serve(async (req: Request) => {
     const headerEncoded = base64UrlEncode(JSON.stringify(header));
     const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
     
+    console.log("JWT Header (encoded):", headerEncoded);
+    console.log("JWT Payload (encoded):", payloadEncoded);
+    
     // Create HMAC-SHA256 signature
     const message = `${headerEncoded}.${payloadEncoded}`;
+    console.log("Message to sign:", message);
+    console.log("API Secret length:", apiSecret?.length);
+    
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(apiSecret),
@@ -205,8 +236,11 @@ serve(async (req: Request) => {
     
     const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
     const signatureBase64 = base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)));
+    
+    console.log("Signature (base64url):", signatureBase64.substring(0, 10) + "...");
 
     const token = `${message}.${signatureBase64}`;
+    console.log("Complete JWT length:", token.length);
 
     return new Response(
       JSON.stringify({ token, identity }),
