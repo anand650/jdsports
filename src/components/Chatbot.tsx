@@ -262,38 +262,10 @@ export const Chatbot = () => {
       {isOpen && (
         <Card className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 max-h-[500px] flex flex-col shadow-2xl border">
           <CardHeader className="flex-shrink-0 flex flex-row items-center justify-between space-y-0 pb-2 px-4 py-3 border-b">
-            <div className="flex items-center space-x-2">
-              <CardTitle className="text-lg">JD Sports Assistant</CardTitle>
-              {user?.id && (
-                <Badge variant="outline" className="text-xs">
-                  <User className="h-3 w-3 mr-1" />
-                  Logged In
-                </Badge>
-              )}
-            </div>
+            <CardTitle className="text-lg">JD Sports Assistant</CardTitle>
             <div className="flex items-center space-x-2">
               {session?.status === 'escalated' && (
                 <Badge variant="secondary">Agent Requested</Badge>
-              )}
-              {contextUsed && (
-                <div className="flex space-x-1">
-                  {contextUsed.knowledgeBase > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      <Database className="h-3 w-3 mr-1" />
-                      KB: {contextUsed.knowledgeBase}
-                    </Badge>
-                  )}
-                  {contextUsed.userOrders === 'yes' && (
-                    <Badge variant="outline" className="text-xs">
-                      Orders ✓
-                    </Badge>
-                  )}
-                  {contextUsed.userCart === 'yes' && (
-                    <Badge variant="outline" className="text-xs">
-                      <ShoppingCart className="h-3 w-3" />
-                    </Badge>
-                  )}
-                </div>
               )}
               <Button
                 variant="ghost"
