@@ -47,6 +47,7 @@ export const useTwilioVoice = () => {
       
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
+        allowIncomingWhileBusy: true,
         sounds: {
           incoming: undefined, // Disable incoming sound, we'll handle notifications in UI
         }
@@ -64,6 +65,15 @@ export const useTwilioVoice = () => {
 
       twilioDevice.on('error', (error) => {
         console.error('Twilio device error:', error);
+        
+        // Add specific handling for connection errors
+        if (error.code === 31000 || error.code === 53001) {
+          console.log('WebSocket connection lost, attempting to reinitialize...');
+          setTimeout(() => {
+            initializeDevice();
+          }, 5000);
+        }
+        
         toast({
           title: "Voice Error",
           description: error.message,
