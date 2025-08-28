@@ -106,7 +106,7 @@
 // });
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import twilio from "https://esm.sh/twilio@4.20.0";
+import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.1/mod.ts";
 
 // Set allowed origins — you can lock this down to your domain
 const corsHeaders = {
@@ -135,20 +135,39 @@ serve(async (req: Request) => {
       );
     }
 
-    const { AccessToken } = twilio.jwt;
-    const { VoiceGrant } = AccessToken;
-
     const identity = "agent";
+    const now = Math.floor(Date.now() / 1000);
+    const ttl = 3600; // 1 hour
 
-    const token = new AccessToken(accountSid, apiKey, apiSecret, { identity });
-    const voiceGrant = new VoiceGrant({
-      outgoingApplicationSid: appSid,
-      incomingAllow: true,
-    });
-    token.addGrant(voiceGrant);
+    // Create JWT payload for Twilio Voice
+    const payload = {
+      iss: apiKey,
+      sub: accountSid,
+      nbf: now,
+      exp: now + ttl,
+      jti: `${apiKey}-${now}`,
+      grants: {
+        identity: identity,
+        voice: {
+          incoming: { allow: true },
+          outgoing: { application_sid: appSid }
+        }
+      }
+    };
+
+    // Create JWT token using djwt
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(apiSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const token = await create({ alg: "HS256", typ: "JWT" }, payload, key);
 
     return new Response(
-      JSON.stringify({ token: token.toJwt(), identity }),
+      JSON.stringify({ token, identity }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
