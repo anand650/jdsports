@@ -1,40 +1,135 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
-import { TranscriptPanel } from './TranscriptPanel';
-import { SuggestionsPanel } from './SuggestionsPanel';
+import { LiveTranscriptPanel } from './LiveTranscriptPanel';
+import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { CustomerInfoPanel } from './CustomerInfoPanel';
-import { useRealtimeTranscripts, useRealtimeSuggestions } from '@/hooks/useRealtimeSubscriptions';
+import { IncomingCallNotification } from './IncomingCallNotification';
 import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export const CallCenterLayout = () => {
   const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<Call | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const { toast } = useToast();
-  
-  // Real-time data subscriptions
-  const transcripts = useRealtimeTranscripts(activeCall?.id || null);
-  const suggestions = useRealtimeSuggestions(activeCall?.id || null);
 
-  const handleAnswerCall = async () => {
-    if (!activeCall) return;
+  // Subscribe to incoming calls and call updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('call-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'calls',
+        },
+        (payload) => {
+          const newCall = payload.new as Call;
+          if (newCall.call_status === 'ringing' && newCall.call_direction === 'inbound') {
+            setIncomingCall(newCall);
+            toast({
+              title: "Incoming Call",
+              description: `Call from ${newCall.customer_number}`,
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+        },
+        (payload) => {
+          const updatedCall = payload.new as Call;
+          if (activeCall && updatedCall.id === activeCall.id) {
+            setActiveCall(updatedCall);
+          }
+          if (incomingCall && updatedCall.id === incomingCall.id) {
+            if (updatedCall.call_status !== 'ringing') {
+              setIncomingCall(null);
+            } else {
+              setIncomingCall(updatedCall);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCall, incomingCall, toast]);
+
+  const handleAnswerCall = async (call?: Call) => {
+    const callToAnswer = call || incomingCall;
+    if (!callToAnswer) return;
     
-    toast({
-      title: "Call Connected",
-      description: `Connected to ${activeCall.customer_number}`,
-    });
+    setActiveCall(callToAnswer);
+    setIncomingCall(null);
+    
+    // Update call status to in-progress
+    try {
+      await supabase
+        .from('calls')
+        .update({ call_status: 'in-progress' })
+        .eq('id', callToAnswer.id);
+      
+      toast({
+        title: "Call Connected",
+        description: `Connected to ${callToAnswer.customer_number}`,
+      });
+
+      // Load customer profile if available
+      const { data: profile } = await supabase
+        .from('customer_profiles')
+        .select('*')
+        .eq('phone_number', callToAnswer.customer_number)
+        .single();
+      
+      if (profile) {
+        setCustomerProfile(profile);
+      }
+    } catch (error) {
+      console.error('Error answering call:', error);
+      toast({
+        title: "Error",
+        description: "Failed to answer call",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeclineCall = async (call: Call) => {
+    setIncomingCall(null);
+    
+    try {
+      await supabase
+        .from('calls')
+        .update({ 
+          call_status: 'completed',
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', call.id);
+    } catch (error) {
+      console.error('Error declining call:', error);
+    }
   };
 
   const handleEndCall = async () => {
     if (!activeCall) return;
 
     try {
-      // Update call with end time
       await supabase
         .from('calls')
-        .update({ ended_at: new Date().toISOString() })
+        .update({ 
+          call_status: 'completed',
+          ended_at: new Date().toISOString() 
+        })
         .eq('id', activeCall.id);
 
       toast({
@@ -43,6 +138,7 @@ export const CallCenterLayout = () => {
       });
 
       setActiveCall(null);
+      setCustomerProfile(null);
     } catch (error) {
       console.error('Error ending call:', error);
       toast({
@@ -81,6 +177,13 @@ export const CallCenterLayout = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
+        {/* Incoming Call Notification */}
+        <IncomingCallNotification
+          incomingCall={incomingCall}
+          onAnswer={handleAnswerCall}
+          onDecline={handleDeclineCall}
+        />
+
         {/* Header with trigger */}
         <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
           <SidebarTrigger className="ml-2" />
@@ -113,10 +216,10 @@ export const CallCenterLayout = () => {
               {/* Left Side - Transcript and Suggestions */}
               <div className="flex-1 flex flex-col gap-4">
                 <div className="flex-1">
-                  <TranscriptPanel transcripts={transcripts} />
+                  <LiveTranscriptPanel callId={activeCall?.id || null} />
                 </div>
                 <div className="flex-1">
-                  <SuggestionsPanel suggestions={suggestions} />
+                  <AISuggestionsPanel callId={activeCall?.id || null} />
                 </div>
               </div>
               
