@@ -27,12 +27,12 @@ export const Navigation = ({ currentView, onViewChange, cartItemCount }: Navigat
 
           {/* Navigation Menu */}
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Men</a>
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Women</a>
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Kids</a>
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Footwear</a>
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Brands</a>
-            <a href="#" className="text-foreground hover:text-primary transition-colors">Sale</a>
+            <button className="text-foreground hover:text-primary transition-colors">Men</button>
+            <button className="text-foreground hover:text-primary transition-colors">Women</button>
+            <button className="text-foreground hover:text-primary transition-colors">Kids</button>
+            <button className="text-foreground hover:text-primary transition-colors">Footwear</button>
+            <button className="text-foreground hover:text-primary transition-colors">Brands</button>
+            <button className="text-foreground hover:text-primary transition-colors">Sale</button>
           </nav>
 
           {/* Right Actions */}
