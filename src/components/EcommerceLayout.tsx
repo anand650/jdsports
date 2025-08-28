@@ -4,8 +4,9 @@ import { ProductGrid } from './ProductGrid';
 import { ProductDetail } from './ProductDetail';
 import { Cart } from './Cart';
 import { Chatbot } from './Chatbot';
-import { Product } from '@/types/ecommerce';
+import { Product, CartItem } from '@/types/ecommerce';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
 export const EcommerceLayout = () => {
@@ -14,12 +15,15 @@ export const EcommerceLayout = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
     fetchProducts();
-    fetchCartItems();
-  }, []);
+    if (user) {
+      fetchCartItems();
+    }
+  }, [user]);
 
   const fetchProducts = async () => {
     try {
@@ -44,14 +48,26 @@ export const EcommerceLayout = () => {
   };
 
   const fetchCartItems = async () => {
+    if (!user) return;
+    
     try {
-      // For now, we'll use localStorage for cart since user auth is not implemented
+      const { data, error } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          product:products(*)
+        `)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      setCartItems(data || []);
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+      // Fallback to localStorage for backward compatibility
       const savedCart = localStorage.getItem('jd_sports_cart');
       if (savedCart) {
         setCartItems(JSON.parse(savedCart));
       }
-    } catch (error) {
-      console.error('Error fetching cart:', error);
     }
   };
 
@@ -60,50 +76,114 @@ export const EcommerceLayout = () => {
     setCurrentView('product');
   };
 
-  const handleAddToCart = (product: Product, size?: string, color?: string, quantity: number = 1) => {
-    const newItem = {
-      id: `${product.id}-${size || 'default'}-${color || 'default'}`,
-      product,
-      quantity,
-      size,
-      color,
-    };
-
-    const existingCartItems = [...cartItems];
-    const existingItemIndex = existingCartItems.findIndex(item => item.id === newItem.id);
-
-    if (existingItemIndex >= 0) {
-      existingCartItems[existingItemIndex].quantity += quantity;
-    } else {
-      existingCartItems.push(newItem);
+  const handleAddToCart = async (product: Product, size?: string, color?: string, quantity: number = 1) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to add items to your cart",
+        variant: "destructive",
+      });
+      return;
     }
 
-    setCartItems(existingCartItems);
-    localStorage.setItem('jd_sports_cart', JSON.stringify(existingCartItems));
+    try {
+      // Check if item already exists in cart
+      const { data: existingItem } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .eq('size', size || '')
+        .eq('color', color || '')
+        .maybeSingle();
 
-    toast({
-      title: "Added to cart",
-      description: `${product.name} has been added to your cart`,
-    });
+      if (existingItem) {
+        // Update quantity
+        const { error } = await supabase
+          .from('cart_items')
+          .update({ quantity: existingItem.quantity + quantity })
+          .eq('id', existingItem.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new item
+        const { error } = await supabase
+          .from('cart_items')
+          .insert({
+            user_id: user.id,
+            product_id: product.id,
+            quantity,
+            size,
+            color
+          });
+
+        if (error) throw error;
+      }
+
+      // Refresh cart
+      await fetchCartItems();
+
+      toast({
+        title: "Added to cart",
+        description: `${product.name} has been added to your cart`,
+      });
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRemoveFromCart = (itemId: string) => {
-    const updatedCart = cartItems.filter(item => item.id !== itemId);
-    setCartItems(updatedCart);
-    localStorage.setItem('jd_sports_cart', JSON.stringify(updatedCart));
+  const handleRemoveFromCart = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setCartItems(cartItems.filter(item => item.id !== itemId));
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove item from cart",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUpdateCartQuantity = (itemId: string, newQuantity: number) => {
+  const handleUpdateCartQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
       handleRemoveFromCart(itemId);
       return;
     }
 
-    const updatedCart = cartItems.map(item =>
-      item.id === itemId ? { ...item, quantity: newQuantity } : item
-    );
-    setCartItems(updatedCart);
-    localStorage.setItem('jd_sports_cart', JSON.stringify(updatedCart));
+    try {
+      const { error } = await supabase
+        .from('cart_items')
+        .update({ quantity: newQuantity })
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      // Update local state
+      setCartItems(cartItems.map(item =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      ));
+    } catch (error) {
+      console.error('Error updating cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update cart item",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

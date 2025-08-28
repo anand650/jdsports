@@ -1,7 +1,9 @@
 import React from 'react';
+import { Search, User, ShoppingCart, Menu, LogOut } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, Search, Menu } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
 
 interface NavigationProps {
   currentView: 'home' | 'product' | 'cart';
@@ -10,6 +12,24 @@ interface NavigationProps {
 }
 
 export const Navigation = ({ currentView, onViewChange, cartItemCount }: NavigationProps) => {
+  const { userProfile, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out.",
+        variant: "destructive",
+      });
+    }
+  };
   return (
     <header className="sticky top-0 z-50 bg-background border-b shadow-sm">
       <div className="container mx-auto px-4">
@@ -41,9 +61,14 @@ export const Navigation = ({ currentView, onViewChange, cartItemCount }: Navigat
               <Search className="h-5 w-5" />
             </Button>
 
-            <Button variant="ghost" size="icon">
-              <User className="h-5 w-5" />
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium hidden md:inline">
+              {userProfile?.full_name || userProfile?.email}
+            </span>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out">
+              <LogOut className="h-5 w-5" />
             </Button>
+          </div>
 
             <Button
               variant="ghost"

@@ -4,6 +4,7 @@ import { AgentSidebar } from './AgentSidebar';
 import { ChatPanel } from './ChatPanel';
 import { ChatSession, ChatMessage } from '@/types/ecommerce';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
 export const AgentDashboard = () => {
@@ -11,6 +12,7 @@ export const AgentDashboard = () => {
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, userProfile } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -126,19 +128,20 @@ export const AgentDashboard = () => {
   };
 
   const handleTakeSession = async (session: ChatSession) => {
+    if (!user) return;
+    
     try {
-      // In a real app, this would assign the current agent
       const { error } = await supabase
         .from('chat_sessions')
         .update({ 
-          assigned_agent_id: 'agent-demo-id', // Replace with actual agent ID
+          assigned_agent_id: user.id,
           status: 'escalated'
         })
         .eq('id', session.id);
 
       if (error) throw error;
 
-      setSelectedSession({ ...session, assigned_agent_id: 'agent-demo-id', status: 'escalated' });
+      setSelectedSession({ ...session, assigned_agent_id: user.id, status: 'escalated' });
       
       toast({
         title: "Session Assigned",
@@ -155,12 +158,12 @@ export const AgentDashboard = () => {
   };
 
   const handleSendMessage = async (content: string) => {
-    if (!selectedSession) return;
+    if (!selectedSession || !user) return;
 
     const message = {
       session_id: selectedSession.id,
       sender_type: 'agent' as const,
-      sender_id: 'agent-demo-id',
+      sender_id: user.id,
       content,
       metadata: {},
       created_at: new Date().toISOString()
@@ -236,13 +239,13 @@ export const AgentDashboard = () => {
             />
           ) : (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-6xl mb-4">💬</div>
-                <h2 className="text-2xl font-semibold mb-2">Agent Dashboard</h2>
-                <p className="text-muted-foreground">
-                  Select a chat session from the sidebar to start assisting customers
-                </p>
-              </div>
+            <div className="text-center">
+              <div className="text-6xl mb-4">💬</div>
+              <h2 className="text-2xl font-semibold mb-2">Welcome, {userProfile?.full_name || 'Agent'}</h2>
+              <p className="text-muted-foreground">
+                Select a chat session from the sidebar to start assisting customers
+              </p>
+            </div>
             </div>
           )}
         </main>
