@@ -69,17 +69,12 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
   };
 
   const getCallStatus = () => {
-    if (!isDeviceReady) return "Initializing...";
-    if (twilioCall && !isConnected) return "Incoming";
-    if (isConnected) return "Connected";
-    if (dbCall && !twilioCall) return "Waiting";
-    return "Ready";
+    // Voice service is disabled
+    return "Disabled";
   };
 
-  const getStatusBadgeVariant = () => {
-    if (!isDeviceReady) return "secondary";
-    if (isConnected) return "default";
-    if (twilioCall || dbCall) return "destructive";
+  const getStatusBadgeVariant = (): "secondary" | "default" | "destructive" | "outline" => {
+    // Voice service is disabled
     return "secondary";
   };
 
@@ -185,24 +180,16 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
           <div className="text-center py-8">
             <Phone className="mx-auto h-12 w-12 text-sidebar-primary mb-4" />
             <p className="text-sidebar-foreground font-medium">
-              {isDeviceReady ? "Ready for Calls" : isInitializing ? "Connecting..." : "Connection Failed"}
+              Voice Service Disabled
             </p>
             <p className="text-sm text-sidebar-accent-foreground mt-2">
-              {isDeviceReady 
-                ? "Waiting for incoming calls" 
-                : isInitializing 
-                  ? "Setting up Twilio voice device" 
-                  : "Unable to connect to voice service"
-              }
+              Voice calling is temporarily disabled for maintenance
             </p>
-            {!isDeviceReady && !isInitializing && (
-              <button 
-                onClick={retryConnection}
-                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm"
-              >
-                Retry Connection
-              </button>
-            )}
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-800">
+                Voice functionality will be restored after connection issues are resolved
+              </p>
+            </div>
           </div>
         )}
       </CardContent>
