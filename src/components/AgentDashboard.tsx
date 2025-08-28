@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AgentSidebar } from './AgentSidebar';
 import { ChatPanel } from './ChatPanel';
+import { AgentNotification } from './AgentNotification';
 import { ChatSession, ChatMessage } from '@/types/ecommerce';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +13,7 @@ export const AgentDashboard = () => {
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newSessionNotification, setNewSessionNotification] = useState<ChatSession | null>(null);
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
 
@@ -37,21 +39,52 @@ export const AgentDashboard = () => {
           table: 'chat_sessions',
           filter: 'status=eq.escalated'
         },
-        (payload) => {
+        async (payload) => {
           const session = payload.new as ChatSession;
-          setActiveSessions(prev => {
-            const exists = prev.find(s => s.id === session.id);
-            if (exists) {
-              return prev.map(s => s.id === session.id ? session : s);
-            } else {
-              return [...prev, session];
-            }
-          });
           
-          toast({
-            title: "New Chat Escalated",
-            description: "A customer has requested human assistance",
-          });
+          // Fetch complete session with user details
+          const { data: sessionData } = await supabase
+            .from('chat_sessions')
+            .select(`
+              *,
+              users!chat_sessions_user_id_fkey(id, full_name, email)
+            `)
+            .eq('id', session.id)
+            .single();
+
+          if (sessionData) {
+            const sessionWithUser = {
+              ...sessionData,
+              user: sessionData.users || null
+            } as ChatSession;
+
+            setActiveSessions(prev => {
+              const exists = prev.find(s => s.id === session.id);
+              if (exists) {
+                return prev.map(s => s.id === session.id ? sessionWithUser : s);
+              } else {
+                return [sessionWithUser, ...prev];
+              }
+            });
+
+            // Enhanced notification with customer details
+            const customerName = sessionWithUser.user?.full_name || sessionWithUser.user?.email || 'Anonymous User';
+            
+            // Show prominent notification
+            setNewSessionNotification(sessionWithUser);
+            
+            toast({
+              title: "🔔 New Chat Escalated",
+              description: `${customerName} needs human assistance`,
+            });
+
+            // Play notification sound (optional)
+            try {
+              const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwYZaLvt559NEAxQp+PwtmMcBjiR1/LKdSEBMXfK5tCSKAUbV6+Z4pVJExBQr+r2vGciBSWL3PWteRwBJYPO8duKMgYYaLHf54lKDgpPr+n4vWcjByqG2+7D0yIFJIbN78CQPwAAaLfq4IpLDwdQr+j8oWwf');
+              audio.volume = 0.3;
+              audio.play().catch(() => {}); // Ignore if audio fails
+            } catch (e) {}
+          }
         }
       )
       .subscribe();
@@ -89,12 +122,22 @@ export const AgentDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('chat_sessions')
-        .select('*')
+        .select(`
+          *,
+          users!chat_sessions_user_id_fkey(id, full_name, email)
+        `)
         .in('status', ['active', 'escalated'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setActiveSessions(data as ChatSession[] || []);
+      
+      // Transform the data to match our interface
+      const sessionsWithUser = data?.map(session => ({
+        ...session,
+        user: session.users || null
+      })) || [];
+      
+      setActiveSessions(sessionsWithUser as ChatSession[]);
     } catch (error) {
       console.error('Error fetching sessions:', error);
       toast({
@@ -249,6 +292,16 @@ export const AgentDashboard = () => {
             </div>
           )}
         </main>
+
+        {/* Prominent notification for new chats */}
+        <AgentNotification
+          newSession={newSessionNotification}
+          onTakeSession={(session) => {
+            handleTakeSession(session);
+            setNewSessionNotification(null);
+          }}
+          onDismiss={() => setNewSessionNotification(null)}
+        />
       </div>
     </SidebarProvider>
   );

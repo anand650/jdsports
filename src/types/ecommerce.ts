@@ -62,6 +62,11 @@ export interface ChatSession {
   escalated_at?: string;
   created_at: string;
   updated_at: string;
+  user?: {
+    id: string;
+    full_name?: string;
+    email: string;
+  };
 }
 
 export interface ChatMessage {
