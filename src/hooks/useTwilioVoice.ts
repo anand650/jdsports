@@ -34,6 +34,118 @@ export const useTwilioVoice = () => {
     console.log('Will implement proper connection handling after cleanup');
     setIsInitializing(false);
     return;
+    
+    // REST OF FUNCTION COMMENTED OUT TO PREVENT EXECUTION
+    /*
+    if (isInitializing) {
+      console.log('Device initialization already in progress, skipping...');
+      return;
+    }
+
+    setIsInitializing(true);
+
+    try {
+      console.log('Initializing Twilio device...');
+      
+      if (deviceRef.current) {
+        console.log('Destroying existing device...');
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+        setDevice(null);
+        setIsDeviceReady(false);
+      }
+
+      const { data, error } = await supabase.functions.invoke('twilio-access-token', {
+        body: { identity: 'agent' }
+      });
+
+      console.log('Token response:', { data, error });
+
+      if (error) {
+        console.error('Token error:', error);
+        throw error;
+      }
+
+      if (!data?.token) {
+        throw new Error('No token received');
+      }
+
+      console.log('Creating Twilio device with token...');
+      console.log('Token starts with:', data.token.substring(0, 50) + '...');
+      
+      const twilioDevice = new Device(data.token, {
+        logLevel: 2,
+        allowIncomingWhileBusy: true,
+        sounds: {
+          incoming: undefined,
+        },
+        edge: ['dublin', 'sydney', 'tokyo'],
+      });
+
+      twilioDevice.on('ready', () => {
+        console.log('Twilio device ready');
+        setIsDeviceReady(true);
+        toast({
+          title: "Voice Ready",
+          description: "Twilio voice device is ready for calls",
+        });
+      });
+
+      twilioDevice.on('error', (error) => {
+        console.error('Twilio device error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          causes: error.causes,
+          solutions: error.solutions,
+          originalError: error.originalError
+        });
+        
+        setIsDeviceReady(false);
+        
+        toast({
+          title: "Voice Connection Error",
+          description: `Connection failed (${error.code}). Please check your network and refresh.`,
+          variant: "destructive",
+        });
+      });
+
+      twilioDevice.on('incoming', (call) => {
+        console.log('Incoming call:', call);
+        setActiveCall(call);
+        setupCallListeners(call);
+      });
+
+      twilioDevice.on('registered', () => {
+        console.log('Device registered successfully');
+        console.log('Device identity:', twilioDevice.identity);
+        console.log('Device state:', twilioDevice.state);
+      });
+
+      twilioDevice.on('unregistered', () => {
+        console.log('Device unregistered');
+        setIsDeviceReady(false);
+      });
+
+      console.log('Registering device...');
+      await twilioDevice.register();
+      console.log('Device registration complete');
+      
+      setDevice(twilioDevice);
+      deviceRef.current = twilioDevice;
+
+    } catch (error) {
+      console.error('Error initializing Twilio device:', error);
+      toast({
+        title: "Initialization Error",
+        description: `Failed to initialize voice device: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsInitializing(false);
+    }
+    */
+  };
       
       // Get access token from Supabase edge function
       const { data, error } = await supabase.functions.invoke('twilio-access-token', {
