@@ -94,18 +94,12 @@ serve(async (req) => {
           .update({ agent_id: availableAgents[0].id })
           .eq('twilio_call_sid', CallSid as string);
 
-        // Generate TwiML to put caller in conference and wait for agent
+        // Generate TwiML to directly dial the agent's device
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-          <Say voice="alice">Please hold while we connect you to an agent.</Say>
-          <Dial>
-            <Conference 
-              startConferenceOnEnter="false"
-              endConferenceOnExit="true"
-              waitUrl="http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient"
-              statusCallback="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-call-status"
-              statusCallbackEvent="start end join leave mute hold"
-            >${CallSid}</Conference>
+          <Say voice="alice">Connecting you to our agent.</Say>
+          <Dial timeout="30" record="record-from-ringing">
+            <Client>agent</Client>
           </Dial>
         </Response>`;
 
