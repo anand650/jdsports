@@ -76,15 +76,15 @@ export const useTwilioVoice = () => {
       console.log('Creating Twilio device with token...');
       console.log('Token starts with:', data.token.substring(0, 50) + '...');
       
-      // Create device with more conservative settings
+      // Create device with optimized settings for connection stability
       const twilioDevice = new Device(data.token, {
-        logLevel: 1, // Reduced log level to avoid spam
-        allowIncomingWhileBusy: false, // More conservative
+        logLevel: 3, // Enable debug logging while testing
+        allowIncomingWhileBusy: false,
         sounds: {
-          incoming: undefined, // Disable sounds
+          incoming: '/path/to/ringtone.mp3', // Enable incoming audio
         },
-        // Use single edge location to avoid connection issues
-        edge: ['dublin']
+        // Use single edge location closest to users
+        edge: 'ie1'
       });
 
       // Set up event listeners with better error handling
@@ -136,10 +136,20 @@ export const useTwilioVoice = () => {
         setIsDeviceReady(false);
       });
 
-      // Add connection state listeners
-      twilioDevice.on('tokenWillExpire', () => {
+      // Add token refresh logic
+      twilioDevice.on('tokenWillExpire', async () => {
         console.log('Token will expire, refreshing...');
-        // Token refresh logic can be added here
+        try {
+          const { data } = await supabase.functions.invoke('twilio-access-token', { 
+            body: { identity: 'agent' }
+          });
+          if (data?.token) {
+            twilioDevice.updateToken(data.token);
+            console.log('Token refreshed successfully');
+          }
+        } catch (error) {
+          console.error('Failed to refresh token:', error);
+        }
       });
 
       console.log('Registering device...');
