@@ -44,7 +44,7 @@ serve(async (req) => {
             "allow": true
           },
           "outgoing": {
-            "application_sid": "APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" // You'll need to create a TwiML app
+            "application_sid": "AP9a84c5966508822194825df93b35242f"
           }
         }
       }
