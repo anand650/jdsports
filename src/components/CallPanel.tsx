@@ -69,12 +69,17 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
   };
 
   const getCallStatus = () => {
-    // Voice service is disabled
-    return "Disabled";
+    if (!isDeviceReady) return "Initializing...";
+    if (twilioCall && !isConnected) return "Incoming";
+    if (isConnected) return "Connected";
+    if (dbCall && !twilioCall) return "Waiting";
+    return "Ready";
   };
 
   const getStatusBadgeVariant = (): "secondary" | "default" | "destructive" | "outline" => {
-    // Voice service is disabled
+    if (!isDeviceReady) return "secondary";
+    if (isConnected) return "default";
+    if (twilioCall || dbCall) return "destructive";
     return "secondary";
   };
 
@@ -180,16 +185,24 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
           <div className="text-center py-8">
             <Phone className="mx-auto h-12 w-12 text-sidebar-primary mb-4" />
             <p className="text-sidebar-foreground font-medium">
-              Voice Service Disabled
+              {isDeviceReady ? "Ready for Calls" : isInitializing ? "Connecting..." : "Connection Failed"}
             </p>
             <p className="text-sm text-sidebar-accent-foreground mt-2">
-              Voice calling is temporarily disabled for maintenance
+              {isDeviceReady 
+                ? "Waiting for incoming calls" 
+                : isInitializing 
+                  ? "Setting up Twilio voice device" 
+                  : "Unable to connect to voice service"
+              }
             </p>
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-xs text-yellow-800">
-                Voice functionality will be restored after connection issues are resolved
-              </p>
-            </div>
+            {!isDeviceReady && !isInitializing && (
+              <button 
+                onClick={retryConnection}
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm"
+              >
+                Retry Connection
+              </button>
+            )}
           </div>
         )}
       </CardContent>

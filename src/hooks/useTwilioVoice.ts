@@ -29,12 +29,138 @@ export const useTwilioVoice = () => {
   }, []);
 
   const initializeDevice = async () => {
-    // TEMPORARILY DISABLE TWILIO DEVICE TO STOP INFINITE ERRORS
-    console.log('Twilio Device initialization disabled to prevent infinite errors');
-    console.log('Will implement proper connection handling after cleanup');
-    setIsInitializing(false);
-    setIsDeviceReady(false);
-    return;
+    if (isInitializing) {
+      console.log('Device initialization already in progress, skipping...');
+      return;
+    }
+
+    setIsInitializing(true);
+
+    try {
+      console.log('Initializing Twilio device...');
+      
+      // Clean up any existing device first
+      if (deviceRef.current) {
+        console.log('Destroying existing device...');
+        try {
+          deviceRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying existing device:', e);
+        }
+        deviceRef.current = null;
+        setDevice(null);
+        setIsDeviceReady(false);
+      }
+
+      // Get fresh token from edge function
+      const { data, error } = await supabase.functions.invoke('twilio-access-token', {
+        body: { identity: 'agent' }
+      });
+
+      console.log('Token response:', { data, error });
+
+      if (error) {
+        console.error('Token error:', error);
+        throw new Error(`Token fetch failed: ${error.message}`);
+      }
+
+      if (!data?.token) {
+        throw new Error('No token received from server');
+      }
+
+      // Validate token format
+      if (!data.token.startsWith('eyJ')) {
+        throw new Error('Invalid token format received');
+      }
+
+      console.log('Creating Twilio device with token...');
+      console.log('Token starts with:', data.token.substring(0, 50) + '...');
+      
+      // Create device with more conservative settings
+      const twilioDevice = new Device(data.token, {
+        logLevel: 1, // Reduced log level to avoid spam
+        allowIncomingWhileBusy: false, // More conservative
+        sounds: {
+          incoming: undefined, // Disable sounds
+        },
+        // Use single edge location to avoid connection issues
+        edge: ['dublin']
+      });
+
+      // Set up event listeners with better error handling
+      twilioDevice.on('ready', () => {
+        console.log('Twilio device ready');
+        setIsDeviceReady(true);
+        toast({
+          title: "Voice Ready",
+          description: "Voice device is ready for calls",
+        });
+      });
+
+      twilioDevice.on('error', (error) => {
+        console.error('Twilio device error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          causes: error.causes,
+          solutions: error.solutions,
+          originalError: error.originalError
+        });
+        
+        setIsDeviceReady(false);
+        
+        // Don't show toast for every error to prevent spam
+        if (error.code !== 31000) {
+          toast({
+            title: "Voice Connection Error",
+            description: `Connection issue (${error.code}). Will retry automatically.`,
+            variant: "destructive",
+          });
+        }
+      });
+
+      twilioDevice.on('incoming', (call) => {
+        console.log('Incoming call:', call);
+        setActiveCall(call);
+        setupCallListeners(call);
+      });
+
+      twilioDevice.on('registered', () => {
+        console.log('Device registered successfully');
+        console.log('Device identity:', twilioDevice.identity);
+        console.log('Device state:', twilioDevice.state);
+      });
+
+      twilioDevice.on('unregistered', () => {
+        console.log('Device unregistered');
+        setIsDeviceReady(false);
+      });
+
+      // Add connection state listeners
+      twilioDevice.on('tokenWillExpire', () => {
+        console.log('Token will expire, refreshing...');
+        // Token refresh logic can be added here
+      });
+
+      console.log('Registering device...');
+      await twilioDevice.register();
+      console.log('Device registration complete');
+      
+      setDevice(twilioDevice);
+      deviceRef.current = twilioDevice;
+
+    } catch (error) {
+      console.error('Error initializing Twilio device:', error);
+      setIsDeviceReady(false);
+      
+      toast({
+        title: "Voice Setup Error",
+        description: `Failed to initialize voice: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsInitializing(false);
+    }
   };
 
   const setupCallListeners = (call: Call) => {
