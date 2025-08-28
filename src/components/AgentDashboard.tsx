@@ -262,18 +262,26 @@ export const AgentDashboard = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
+        {/* Header */}
+        <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
+          <div className="flex-1 text-center">
+            <h1 className="text-lg font-semibold">Agent Dashboard</h1>
+          </div>
+        </header>
         {/* Sidebar */}
-        <AgentSidebar
-          sessions={activeSessions}
-          selectedSession={selectedSession}
-          onSelectSession={setSelectedSession}
-          onTakeSession={handleTakeSession}
-          onCloseSession={handleCloseSession}
-          loading={loading}
-        />
+        <aside className="pt-12">
+          <AgentSidebar
+            sessions={activeSessions}
+            selectedSession={selectedSession}
+            onSelectSession={setSelectedSession}
+            onTakeSession={handleTakeSession}
+            onCloseSession={handleCloseSession}
+            loading={loading}
+          />
+        </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1 pt-12">
           {selectedSession ? (
             <ChatPanel
               session={selectedSession}
