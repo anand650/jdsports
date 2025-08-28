@@ -7,8 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { EcommerceLayout } from "./components/EcommerceLayout";
-import { AgentDashboard } from "./components/AgentDashboard";
-import { CallCenterLayout } from "./components/CallCenterLayout";
+import { UnifiedAgentDashboard } from "./components/UnifiedAgentDashboard";
 import { Auth } from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -35,15 +34,7 @@ const App = () => (
               path="/agent" 
               element={
                 <ProtectedRoute requiredRole="agent">
-                  <CallCenterLayout />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/agent/chat" 
-              element={
-                <ProtectedRoute requiredRole="agent">
-                  <AgentDashboard />
+                  <UnifiedAgentDashboard />
                 </ProtectedRoute>
               } 
             />

@@ -9,7 +9,11 @@ import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-export const CallCenterLayout = () => {
+interface CallCenterLayoutProps {
+  showHeader?: boolean;
+}
+
+export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) => {
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [incomingCall, setIncomingCall] = useState<Call | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
@@ -184,22 +188,23 @@ export const CallCenterLayout = () => {
           onDecline={handleDeclineCall}
         />
 
-        {/* Header with trigger */}
-        <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
-          <SidebarTrigger className="ml-2" />
-          <div className="flex-1 text-center">
-            <h1 className="text-lg font-semibold">Call Center Dashboard</h1>
-          </div>
-          <button 
-            onClick={simulateIncomingCall}
-            className="mr-4 text-sm px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-          >
-            Simulate Call
-          </button>
-        </header>
+        {showHeader && (
+          <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
+            <SidebarTrigger className="ml-2" />
+            <div className="flex-1 text-center">
+              <h1 className="text-lg font-semibold">Call Center Dashboard</h1>
+            </div>
+            <button 
+              onClick={simulateIncomingCall}
+              className="mr-4 text-sm px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Simulate Call
+            </button>
+          </header>
+        )}
 
         {/* Sidebar - Call Panel */}
-        <aside className="w-80 border-r bg-sidebar pt-12">
+        <aside className={`w-80 border-r bg-sidebar ${showHeader ? 'pt-12' : ''}`}>
           <div className="p-4 h-full">
             <CallPanel
               activeCall={activeCall}
@@ -210,7 +215,7 @@ export const CallCenterLayout = () => {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 pt-12">
+        <main className={`flex-1 ${showHeader ? 'pt-12' : ''}`}>
           <div className="h-[calc(100vh-3rem)] p-4 flex flex-col gap-4">
             <div className="flex gap-4 h-full">
               {/* Left Side - Transcript and Suggestions */}
@@ -232,6 +237,17 @@ export const CallCenterLayout = () => {
               </div>
             </div>
           </div>
+          
+          {!showHeader && (
+            <div className="absolute top-4 right-4 z-10">
+              <button 
+                onClick={simulateIncomingCall}
+                className="text-sm px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                Simulate Call
+              </button>
+            </div>
+          )}
         </main>
       </div>
     </SidebarProvider>

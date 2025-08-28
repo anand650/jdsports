@@ -8,7 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
-export const AgentDashboard = () => {
+interface AgentDashboardProps {
+  showHeader?: boolean;
+}
+
+export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
   const [activeSessions, setActiveSessions] = useState<ChatSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -262,13 +266,14 @@ export const AgentDashboard = () => {
   return (
     <SidebarProvider>
       <div className="h-screen flex flex-col w-full bg-background">
-        {/* Header with Toggle */}
-        <header className="h-12 flex items-center border-b bg-background z-20 flex-shrink-0">
-          <SidebarTrigger className="ml-2" />
-          <div className="flex-1 text-center">
-            <h1 className="text-lg font-semibold">Agent Dashboard</h1>
-          </div>
-        </header>
+        {showHeader && (
+          <header className="h-12 flex items-center border-b bg-background z-20 flex-shrink-0">
+            <SidebarTrigger className="ml-2" />
+            <div className="flex-1 text-center">
+              <h1 className="text-lg font-semibold">Agent Dashboard</h1>
+            </div>
+          </header>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 flex min-h-0">
