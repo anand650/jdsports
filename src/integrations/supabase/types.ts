@@ -77,9 +77,13 @@ export type Database = {
           created_at: string
           customer_number: string
           ended_at: string | null
+          first_response_time: number | null
           id: string
           recording_duration: number | null
           recording_url: string | null
+          resolution_status: string | null
+          resolution_time: number | null
+          satisfaction_score: number | null
           started_at: string
           twilio_call_sid: string | null
           twilio_conference_sid: string | null
@@ -95,9 +99,13 @@ export type Database = {
           created_at?: string
           customer_number: string
           ended_at?: string | null
+          first_response_time?: number | null
           id?: string
           recording_duration?: number | null
           recording_url?: string | null
+          resolution_status?: string | null
+          resolution_time?: number | null
+          satisfaction_score?: number | null
           started_at?: string
           twilio_call_sid?: string | null
           twilio_conference_sid?: string | null
@@ -113,9 +121,13 @@ export type Database = {
           created_at?: string
           customer_number?: string
           ended_at?: string | null
+          first_response_time?: number | null
           id?: string
           recording_duration?: number | null
           recording_url?: string | null
+          resolution_status?: string | null
+          resolution_time?: number | null
+          satisfaction_score?: number | null
           started_at?: string
           twilio_call_sid?: string | null
           twilio_conference_sid?: string | null
@@ -551,6 +563,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          phone_number: string | null
           role: string | null
           updated_at: string
         }
@@ -560,6 +573,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id?: string
+          phone_number?: string | null
           role?: string | null
           updated_at?: string
         }
@@ -569,6 +583,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          phone_number?: string | null
           role?: string | null
           updated_at?: string
         }

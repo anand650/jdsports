@@ -89,7 +89,7 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
         .limit(50);
 
       if (error) throw error;
-      setCalls(data || []);
+      setCalls((data as Call[]) || []);
     } catch (error) {
       console.error('Error loading call history:', error);
     } finally {

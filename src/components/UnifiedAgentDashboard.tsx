@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, MessageSquare } from 'lucide-react';
+import { Phone, MessageSquare, BarChart3 } from 'lucide-react';
 import { CallCenterLayout } from './CallCenterLayout';
 import { AgentDashboard } from './AgentDashboard';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
 
-type DashboardMode = 'call-center' | 'chat-support';
+type DashboardMode = 'call-center' | 'chat-support' | 'analytics';
 
 export const UnifiedAgentDashboard = () => {
   const [mode, setMode] = useState<DashboardMode>('call-center');
@@ -17,7 +18,9 @@ export const UnifiedAgentDashboard = () => {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">Agent Dashboard</h1>
           <Badge variant="outline" className="text-xs">
-            {mode === 'call-center' ? 'Call Center Mode' : 'Chat Support Mode'}
+            {mode === 'call-center' ? 'Call Center Mode' : 
+             mode === 'chat-support' ? 'Chat Support Mode' : 
+             'Analytics Mode'}
           </Badge>
         </div>
         
@@ -40,6 +43,15 @@ export const UnifiedAgentDashboard = () => {
             <MessageSquare className="h-4 w-4" />
             Chat Support
           </Button>
+          <Button
+            variant={mode === 'analytics' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setMode('analytics')}
+            className="flex items-center gap-2 transition-all"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </Button>
         </div>
       </header>
 
@@ -49,9 +61,13 @@ export const UnifiedAgentDashboard = () => {
           <div className="h-full">
             <CallCenterLayout showHeader={false} />
           </div>
-        ) : (
+        ) : mode === 'chat-support' ? (
           <div className="h-full">
             <AgentDashboard showHeader={false} />
+          </div>
+        ) : (
+          <div className="h-full">
+            <AnalyticsDashboard />
           </div>
         )}
       </div>

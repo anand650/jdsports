@@ -22,6 +22,10 @@ export interface Call {
   call_duration?: number;
   recording_url?: string;
   recording_duration?: number;
+  satisfaction_score?: number;
+  resolution_status?: 'resolved' | 'unresolved' | 'escalated' | 'pending';
+  first_response_time?: number;
+  resolution_time?: number;
 }
 
 export interface CustomerProfile {
@@ -37,6 +41,17 @@ export interface CustomerProfile {
   tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface CallAnalytics {
+  totalCalls: number;
+  avgCallDuration: number;
+  resolutionRate: number;
+  avgSatisfactionScore: number;
+  activeAgents: number;
+  callVolumeByHour: Array<{ hour: string; count: number }>;
+  resolutionBreakdown: Array<{ status: string; count: number }>;
+  satisfactionDistribution: Array<{ score: number; count: number }>;
 }
 
 export interface Transcript {

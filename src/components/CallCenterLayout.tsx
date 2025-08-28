@@ -5,6 +5,8 @@ import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { CallHistory } from './CallHistory';
 import { CustomerInfoPanel } from './CustomerInfoPanel';
+import { EnhancedCustomerInfoPanel } from './EnhancedCustomerInfoPanel';
+import { CallDetailsModal } from './CallDetailsModal';
 import { IncomingCallNotification } from './IncomingCallNotification';
 import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +20,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [incomingCall, setIncomingCall] = useState<Call | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
+  const [selectedCall, setSelectedCall] = useState<Call | null>(null);
+  const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const { toast } = useToast();
 
   // Subscribe to incoming calls and call updates
@@ -185,7 +189,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
 
       if (error) throw error;
       if (data) {
-        setActiveCall(data);
+        setActiveCall(data as Call);
         toast({
           title: "Incoming Call",
           description: `Call from ${data.customer_number}`,
@@ -194,6 +198,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     } catch (error) {
       console.error('Error creating call:', error);
     }
+  };
+
+  const handleSelectCall = (call: Call) => {
+    setSelectedCall(call);
+    setIsCallDetailsOpen(true);
   };
 
   return (
@@ -248,7 +257,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               
               {/* Center - Customer Info */}
               <div className="w-80">
-                <CustomerInfoPanel 
+                <EnhancedCustomerInfoPanel 
                   customerProfile={customerProfile}
                   activeCall={activeCall}
                 />
@@ -257,10 +266,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               {/* Right Side - Call History */}
               <div className="w-80">
                 <CallHistory 
-                  onSelectCall={(call) => {
-                    // Could implement call details view here
-                    console.log('Selected call:', call);
-                  }}
+                  onSelectCall={handleSelectCall}
                 />
               </div>
             </div>
@@ -277,6 +283,16 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
             </div>
           )}
         </main>
+        
+        {/* Call Details Modal */}
+        <CallDetailsModal
+          call={selectedCall}
+          isOpen={isCallDetailsOpen}
+          onClose={() => {
+            setIsCallDetailsOpen(false);
+            setSelectedCall(null);
+          }}
+        />
       </div>
     </SidebarProvider>
   );
