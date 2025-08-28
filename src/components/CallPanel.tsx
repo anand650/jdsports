@@ -15,6 +15,22 @@ interface CallPanelProps {
 export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallPanelProps) => {
   const [callDuration, setCallDuration] = useState(0);
   
+  // TEMPORARILY DISABLE TWILIO VOICE HOOK TO STOP INFINITE ERRORS
+  console.log('CallPanel: Twilio voice functionality temporarily disabled');
+  
+  const mockTwilioVoice = {
+    activeCall: null,
+    isConnected: false,
+    isMuted: false,
+    isOnHold: false,
+    isDeviceReady: false,
+    answerCall: () => console.log('answerCall disabled'),
+    rejectCall: () => console.log('rejectCall disabled'),
+    hangupCall: () => console.log('hangupCall disabled'),
+    toggleMute: () => console.log('toggleMute disabled'),
+    toggleHold: () => console.log('toggleHold disabled'),
+  };
+
   const {
     activeCall: twilioCall,
     isConnected,
@@ -26,7 +42,7 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
     hangupCall,
     toggleMute,
     toggleHold,
-  } = useTwilioVoice();
+  } = mockTwilioVoice; // useTwilioVoice(); TEMPORARILY DISABLED
 
   // Timer for call duration
   useEffect(() => {

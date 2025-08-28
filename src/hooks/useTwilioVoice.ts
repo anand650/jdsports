@@ -15,9 +15,11 @@ export const useTwilioVoice = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    initializeDevice();
-    
+    console.log('useTwilioVoice: useEffect triggered');
+    // TEMPORARILY DISABLE TWILIO TO STOP INFINITE ERRORS
+    console.log('Twilio initialization temporarily disabled to stop infinite errors');
     return () => {
+      console.log('useTwilioVoice: cleanup function called');
       if (deviceRef.current) {
         console.log('Cleaning up Twilio device...');
         deviceRef.current.destroy();
@@ -27,6 +29,9 @@ export const useTwilioVoice = () => {
   }, []);
 
   const initializeDevice = async () => {
+    console.log('initializeDevice called - CURRENTLY DISABLED');
+    return; // TEMPORARILY DISABLED
+    
     // Prevent multiple initialization attempts
     if (isInitializing) {
       console.log('Device initialization already in progress, skipping...');
