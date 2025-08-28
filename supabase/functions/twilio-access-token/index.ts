@@ -25,9 +25,16 @@ serve(async (req) => {
     const { identity = 'agent' } = await req.json();
     console.log('Generating token for identity:', identity);
 
-    // Use a simpler approach - create the token manually
+    // Create proper JWT token for Twilio Voice SDK
     const now = Math.floor(Date.now() / 1000);
     const ttl = 3600; // 1 hour
+
+    // Twilio Voice SDK requires specific JWT format
+    const header = {
+      "typ": "JWT",
+      "alg": "HS256",
+      "cty": "twilio-fpa;v=1"
+    };
 
     const payload = {
       "iss": accountSid,
@@ -36,6 +43,7 @@ serve(async (req) => {
       "exp": now + ttl,
       "jti": `${accountSid}-${now}`,
       "grants": {
+        "identity": identity,
         "voice": {
           "incoming": {
             "allow": true
@@ -47,49 +55,35 @@ serve(async (req) => {
       }
     };
 
-    // Create JWT manually using Twilio's format
-    const header = {
-      "cty": "twilio-fpa;v=1",
-      "typ": "JWT",
-      "alg": "HS256"
-    };
-
-    // Base64url encode
-    const base64UrlEncode = (obj: any) => {
-      return btoa(JSON.stringify(obj))
+    // Base64url encode function
+    const base64UrlEncode = (str: string) => {
+      return btoa(str)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=/g, '');
     };
 
-    const headerEncoded = base64UrlEncode(header);
-    const payloadEncoded = base64UrlEncode(payload);
+    // Encode header and payload
+    const headerEncoded = base64UrlEncode(JSON.stringify(header));
+    const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
     
-    // Create HMAC signature
+    // Create HMAC-SHA256 signature
+    const message = `${headerEncoded}.${payloadEncoded}`;
     const encoder = new TextEncoder();
-    const data = encoder.encode(`${headerEncoded}.${payloadEncoded}`);
-    const key = encoder.encode(authToken);
-    
-    const cryptoKey = await crypto.subtle.importKey(
+    const key = await crypto.subtle.importKey(
       'raw',
-      key,
+      encoder.encode(authToken),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
     );
     
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
-    const signatureArray = new Uint8Array(signature);
-    
-    // Convert signature to base64url
-    const signatureBase64 = btoa(String.fromCharCode(...signatureArray))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+    const signatureBase64 = base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)));
 
-    const token = `${headerEncoded}.${payloadEncoded}.${signatureBase64}`;
+    const token = `${message}.${signatureBase64}`;
     
-    console.log('Token generated successfully');
+    console.log('JWT token generated successfully for identity:', identity);
 
     return new Response(
       JSON.stringify({ 
