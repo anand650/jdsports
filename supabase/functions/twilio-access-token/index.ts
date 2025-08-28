@@ -106,7 +106,6 @@
 // });
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.1/mod.ts";
 
 // Set allowed origins — you can lock this down to your domain
 const corsHeaders = {
@@ -155,7 +154,26 @@ serve(async (req: Request) => {
       }
     };
 
-    // Create JWT token using djwt
+    // Base64url encode function
+    const base64UrlEncode = (str: string) => {
+      return btoa(str)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+    };
+
+    // Create JWT header
+    const header = {
+      alg: "HS256",
+      typ: "JWT"
+    };
+
+    // Encode header and payload
+    const headerEncoded = base64UrlEncode(JSON.stringify(header));
+    const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
+    
+    // Create HMAC-SHA256 signature
+    const message = `${headerEncoded}.${payloadEncoded}`;
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(apiSecret),
@@ -163,8 +181,11 @@ serve(async (req: Request) => {
       false,
       ["sign"]
     );
+    
+    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+    const signatureBase64 = base64UrlEncode(String.fromCharCode(...new Uint8Array(signature)));
 
-    const token = await create({ alg: "HS256", typ: "JWT" }, payload, key);
+    const token = `${message}.${signatureBase64}`;
 
     return new Response(
       JSON.stringify({ token, identity }),
