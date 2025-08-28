@@ -67,3 +67,12 @@ verify_jwt = false
 
 [functions.twilio-end-call]
 verify_jwt = false
+
+[functions.vapi-customer-lookup]
+verify_jwt = false
+
+[functions.vapi-product-lookup]
+verify_jwt = false
+
+[functions.vapi-order-lookup]
+verify_jwt = false
