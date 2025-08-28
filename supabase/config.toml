@@ -49,3 +49,15 @@ vector_port = 54328
 
 [functions.chatbot-rag]
 verify_jwt = false
+
+[functions.twilio-voice-webhook]
+verify_jwt = false
+
+[functions.twilio-audio-stream]
+verify_jwt = false
+
+[functions.twilio-call-controls]
+verify_jwt = false
+
+[functions.generate-suggestion]
+verify_jwt = false
