@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AgentSidebar } from './AgentSidebar';
 import { ChatPanel } from './ChatPanel';
 import { AgentNotification } from './AgentNotification';
@@ -262,6 +262,14 @@ export const AgentDashboard = () => {
   return (
     <SidebarProvider>
       <div className="h-screen flex w-full bg-background">
+        {/* Header with Toggle */}
+        <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-20">
+          <SidebarTrigger className="ml-2" />
+          <div className="flex-1 text-center">
+            <h1 className="text-lg font-semibold">Agent Dashboard</h1>
+          </div>
+        </header>
+
         {/* Sidebar */}
         <AgentSidebar
           sessions={activeSessions}
@@ -273,7 +281,7 @@ export const AgentDashboard = () => {
         />
 
         {/* Main Content */}
-        <main className="flex-1 h-full">
+        <main className="flex-1 h-full pt-12">
           {selectedSession ? (
             <ChatPanel
               session={selectedSession}
