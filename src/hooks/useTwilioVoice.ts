@@ -16,8 +16,8 @@ export const useTwilioVoice = () => {
 
   useEffect(() => {
     console.log('useTwilioVoice: useEffect triggered');
-    // TEMPORARILY DISABLE TWILIO TO STOP INFINITE ERRORS
-    console.log('Twilio initialization temporarily disabled to stop infinite errors');
+    initializeDevice();
+    
     return () => {
       console.log('useTwilioVoice: cleanup function called');
       if (deviceRef.current) {
@@ -29,9 +29,6 @@ export const useTwilioVoice = () => {
   }, []);
 
   const initializeDevice = async () => {
-    console.log('initializeDevice called - CURRENTLY DISABLED');
-    return; // TEMPORARILY DISABLED
-    
     // Prevent multiple initialization attempts
     if (isInitializing) {
       console.log('Device initialization already in progress, skipping...');
@@ -91,9 +88,13 @@ export const useTwilioVoice = () => {
       twilioDevice.on('error', (error) => {
         console.error('Twilio device error:', error);
         
+        // Don't retry automatically to prevent infinite loops
+        // Just notify the user and mark device as not ready
+        setIsDeviceReady(false);
+        
         toast({
-          title: "Voice Error",
-          description: error.message,
+          title: "Voice Connection Error",
+          description: "Voice connection lost. Please refresh to reconnect.",
           variant: "destructive",
         });
       });
