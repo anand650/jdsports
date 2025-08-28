@@ -1,0 +1,7 @@
+-- Insert sample products with proper PostgreSQL array syntax
+INSERT INTO public.products (name, description, category, brand, price, stock_quantity, colors, sizes, images, is_active) VALUES
+('Air Max 90', 'Classic Nike Air Max sneakers with visible air cushioning', 'shoes', 'Nike', 120.00, 50, ARRAY['White', 'Black', 'Red', 'Blue'], ARRAY['6', '7', '8', '9', '10', '11', '12'], ARRAY['https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500'], true),
+('Stan Smith', 'Iconic Adidas white leather tennis shoes', 'shoes', 'Adidas', 80.00, 30, ARRAY['White', 'Green'], ARRAY['6', '7', '8', '9', '10', '11', '12'], ARRAY['https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=500'], true),
+('Classic Tracksuit', 'Comfortable cotton tracksuit for casual wear', 'clothing', 'JD Sports', 65.00, 25, ARRAY['Black', 'Navy', 'Gray'], ARRAY['S', 'M', 'L', 'XL', 'XXL'], ARRAY['https://images.unsplash.com/photo-1556821840-3a9416b45f75?w=500'], true),
+('Running Shorts', 'Lightweight shorts perfect for running and gym', 'clothing', 'Nike', 35.00, 40, ARRAY['Black', 'Navy', 'Red'], ARRAY['S', 'M', 'L', 'XL'], ARRAY['https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=500'], true),
+('Sports Backpack', 'Durable backpack with multiple compartments', 'accessories', 'Adidas', 45.00, 15, ARRAY['Black', 'Blue', 'Gray'], ARRAY['One Size'], ARRAY['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'], true);
