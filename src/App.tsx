@@ -8,6 +8,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { EcommerceLayout } from "./components/EcommerceLayout";
 import { AgentDashboard } from "./components/AgentDashboard";
+import { CallCenterLayout } from "./components/CallCenterLayout";
 import { Auth } from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,14 @@ const App = () => (
             />
             <Route 
               path="/agent" 
+              element={
+                <ProtectedRoute requiredRole="agent">
+                  <CallCenterLayout />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/agent/chat" 
               element={
                 <ProtectedRoute requiredRole="agent">
                   <AgentDashboard />
