@@ -29,25 +29,11 @@ export const useTwilioVoice = () => {
   }, []);
 
   const initializeDevice = async () => {
-    // Prevent multiple initialization attempts
-    if (isInitializing) {
-      console.log('Device initialization already in progress, skipping...');
-      return;
-    }
-
-    setIsInitializing(true);
-
-    try {
-      console.log('Initializing Twilio device...');
-      
-      // Clean up existing device first
-      if (deviceRef.current) {
-        console.log('Destroying existing device...');
-        deviceRef.current.destroy();
-        deviceRef.current = null;
-        setDevice(null);
-        setIsDeviceReady(false);
-      }
+    // TEMPORARILY DISABLE TWILIO DEVICE TO STOP INFINITE ERRORS
+    console.log('Twilio Device initialization disabled to prevent infinite errors');
+    console.log('Will implement proper connection handling after cleanup');
+    setIsInitializing(false);
+    return;
       
       // Get access token from Supabase edge function
       const { data, error } = await supabase.functions.invoke('twilio-access-token', {
