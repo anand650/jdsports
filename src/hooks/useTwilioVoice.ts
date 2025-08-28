@@ -78,13 +78,10 @@ export const useTwilioVoice = () => {
       
       // Create device with optimized settings for connection stability
       const twilioDevice = new Device(data.token, {
-        logLevel: 3, // Enable debug logging while testing
+        logLevel: 1, // Reduce logging in production
         allowIncomingWhileBusy: false,
-        sounds: {
-          incoming: '/path/to/ringtone.mp3', // Enable incoming audio
-        },
-        // Use single edge location closest to users
-        edge: 'ie1'
+        // Let Twilio auto-select the best edge location for optimal connectivity
+        // Remove hardcoded edge to prevent regional connectivity issues
       });
 
       // Set up event listeners with better error handling
