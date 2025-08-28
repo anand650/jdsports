@@ -13,12 +13,14 @@ serve(async (req) => {
 
   try {
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
-    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const apiKey = Deno.env.get('TWILIO_API_KEY');
+    const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET');
     
     console.log('Account SID:', accountSid ? 'Set' : 'Missing');
-    console.log('Auth Token:', authToken ? 'Set' : 'Missing');
+    console.log('API Key:', apiKey ? 'Set' : 'Missing');
+    console.log('API Key Secret:', apiKeySecret ? 'Set' : 'Missing');
     
-    if (!accountSid || !authToken) {
+    if (!accountSid || !apiKey || !apiKeySecret) {
       throw new Error('Twilio credentials not configured');
     }
 
@@ -37,11 +39,11 @@ serve(async (req) => {
     };
 
     const payload = {
-      "iss": accountSid,
+      "iss": apiKey,
       "sub": accountSid,
       "nbf": now,
       "exp": now + ttl,
-      "jti": `${accountSid}-${now}`,
+      "jti": `${apiKey}-${now}`,
       "grants": {
         "identity": identity,
         "voice": {
@@ -72,7 +74,7 @@ serve(async (req) => {
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(authToken),
+      encoder.encode(apiKeySecret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
