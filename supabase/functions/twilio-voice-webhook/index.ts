@@ -94,16 +94,6 @@ serve(async (req) => {
           .update({ agent_id: availableAgents[0].id })
           .eq('twilio_call_sid', CallSid as string);
 
-        // Store conference SID for agent connection
-        await supabase
-          .from('calls')
-          .update({ 
-            agent_id: availableAgents[0].id,
-            twilio_conference_sid: CallSid as string,
-            call_status: 'ringing'
-          })
-          .eq('twilio_call_sid', CallSid as string);
-
         // Generate TwiML to put caller in conference and wait for agent
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>

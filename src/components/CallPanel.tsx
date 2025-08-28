@@ -42,57 +42,41 @@ export const CallPanel = ({ activeCall, onAnswerCall, onEndCall }: CallPanelProp
   };
 
   const handleAnswer = async () => {
-    if (activeCall && activeCall.twilio_conference_sid) {
-      // Connect agent to the conference
-      try {
-        const response = await supabase.functions.invoke('twilio-call-controls', {
-          body: {
-            action: 'connect_agent',
-            conferenceId: activeCall.twilio_conference_sid
-          }
-        });
-        
-        if (response.error) {
-          console.error('Error connecting agent:', response.error);
-          toast({
-            title: "Error",
-            description: "Failed to connect to call",
-            variant: "destructive",
-          });
-        } else {
-          setIsConnected(true);
-          setCallDuration(0);
-          onAnswerCall();
-        }
-      } catch (error) {
-        console.error('Error connecting to conference:', error);
-        toast({
-          title: "Error",
-          description: "Failed to connect to call",
-          variant: "destructive",
-        });
-      }
-    } else {
+    if (activeCall) {
       setIsConnected(true);
       setCallDuration(0);
       onAnswerCall();
+      
+      // Update call status to in-progress in database
+      try {
+        await supabase
+          .from('calls')
+          .update({ call_status: 'in-progress' })
+          .eq('id', activeCall.id);
+      } catch (error) {
+        console.error('Error updating call status:', error);
+      }
     }
   };
 
   const handleEnd = async () => {
     if (activeCall?.twilio_call_sid) {
       try {
-        await supabase.functions.invoke('twilio-call-controls', {
+        await supabase.functions.invoke('twilio-end-call', {
           body: {
-            action: 'hangup',
             callSid: activeCall.twilio_call_sid
           }
+        });
+        
+        toast({
+          title: "Call Ended",
+          description: "Call has been terminated successfully",
         });
       } catch (error) {
         console.error('Error ending call:', error);
         toast({
-          title: "Error",
-          description: "Failed to end call",
+          title: "Error", 
+          description: "Failed to end call properly",
           variant: "destructive",
         });
       }
