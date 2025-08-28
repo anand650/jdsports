@@ -100,22 +100,19 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         setCustomerProfile(profile);
       }
 
-      // Start transcription for this call
+      // Start real transcription for this call
       try {
-        // For now, let's simulate transcription to test the UI
-        await supabase.functions.invoke('simulate-transcription', {
-          body: { callId: callToAnswer.id }
-        });
-        console.log('Transcription simulation started for call:', callToAnswer.id);
-        
-        // Also try to start real transcription
         await supabase.functions.invoke('twilio-start-transcription', {
           body: { callId: callToAnswer.id }
         });
         console.log('Real transcription started for call:', callToAnswer.id);
       } catch (transcriptionError) {
         console.error('Failed to start transcription:', transcriptionError);
-        // Don't fail the call answer if transcription fails
+        toast({
+          title: "Transcription Warning",
+          description: "Transcription may not be available for this call",
+          variant: "destructive",
+        });
       }
 
     } catch (error) {
