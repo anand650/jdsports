@@ -30,7 +30,7 @@ export const Chatbot = () => {
 
   useEffect(() => {
     if (session) {
-      // Subscribe to real-time messages
+      // Subscribe to real-time messages to avoid duplicates
       const channel = supabase
         .channel('chat_messages')
         .on(
@@ -43,7 +43,13 @@ export const Chatbot = () => {
           },
           (payload) => {
             const newMessage = payload.new as ChatMessage;
-            setMessages(prev => [...prev, newMessage]);
+            // Only add if the message doesn't already exist (prevent duplicates)
+            setMessages(prev => {
+              const exists = prev.find(msg => msg.id === newMessage.id || 
+                (msg.content === newMessage.content && msg.sender_type === newMessage.sender_type));
+              if (exists) return prev;
+              return [...prev, newMessage];
+            });
           }
         )
         .subscribe();
@@ -147,9 +153,11 @@ export const Chatbot = () => {
         throw new Error(response.error || 'Failed to get AI response');
       }
 
-      // The AI message is already saved to the database by the edge function
-      // We just need to trigger a re-fetch or wait for real-time updates
-      // For now, let's add the message locally to ensure immediate UI update
+      // Set escalation flag based on AI response
+      setNeedsEscalation(response.needsEscalation);
+      
+      // The AI response will be handled by real-time subscription
+      // Just add it locally with immediate UI update to prevent delay
       const aiMessage: ChatMessage = {
         id: `ai_${Date.now()}`,
         session_id: session!.id,
@@ -163,7 +171,6 @@ export const Chatbot = () => {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-      setNeedsEscalation(response.needsEscalation);
       
     } catch (error) {
       console.error('Error getting AI response:', error);
@@ -242,8 +249,8 @@ export const Chatbot = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 h-[500px] flex flex-col shadow-2xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 max-h-[500px] flex flex-col shadow-2xl border">
+          <CardHeader className="flex-shrink-0 flex flex-row items-center justify-between space-y-0 pb-2 px-4 py-3 border-b">
             <CardTitle className="text-lg">JD Sports Assistant</CardTitle>
             <div className="flex items-center space-x-2">
               {session?.status === 'escalated' && (
@@ -259,15 +266,15 @@ export const Chatbot = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="flex-1 flex flex-col p-0">
+          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
               {messages.map((message) => (
                 <div
                   key={message.id}
                   className={`flex ${message.sender_type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className={`flex items-start space-x-2 max-w-[80%] ${
+                  <div className={`flex items-start space-x-2 max-w-[85%] ${
                     message.sender_type === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                   }`}>
                     <div className="flex-shrink-0">
@@ -282,14 +289,14 @@ export const Chatbot = () => {
                       )}
                     </div>
                     <div
-                      className={`px-3 py-2 rounded-lg ${
+                      className={`px-3 py-2 rounded-lg break-words ${
                         message.sender_type === 'user'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted'
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
-                      {message.metadata?.escalation_suggested && (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      {message.metadata?.escalation_suggested && needsEscalation && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -324,7 +331,7 @@ export const Chatbot = () => {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t">
+            <div className="flex-shrink-0 p-4 border-t bg-background">
               <div className="flex space-x-2">
                 <Input
                   value={input}
@@ -332,11 +339,13 @@ export const Chatbot = () => {
                   onKeyPress={handleKeyPress}
                   placeholder="Type your message..."
                   disabled={isLoading}
+                  className="flex-1"
                 />
                 <Button
                   onClick={sendMessage}
                   disabled={!input.trim() || isLoading}
                   size="icon"
+                  className="flex-shrink-0"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
