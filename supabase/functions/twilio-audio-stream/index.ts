@@ -41,6 +41,9 @@ serve(async (req) => {
           callSid = message.start.callSid;
           console.log(`Media stream started for call: ${callSid}`);
           
+          // Clean up old buffers before starting new call
+          cleanupOldBuffers();
+          
           // Find the call record
           const { data: callRecord } = await supabase
             .from('calls')
@@ -50,7 +53,8 @@ serve(async (req) => {
             
           if (callRecord) {
             callId = callRecord.id;
-            console.log(`Found call record: ${callId}`);
+            activeCallSessions.add(callId);
+            console.log(`Found call record: ${callId}, added to active sessions`);
           }
           break;
           
@@ -63,6 +67,9 @@ serve(async (req) => {
           
         case 'stop':
           console.log(`Media stream stopped for call: ${callSid}`);
+          if (callId) {
+            cleanupCallBuffers(callId);
+          }
           break;
           
         default:
@@ -75,6 +82,9 @@ serve(async (req) => {
 
   socket.addEventListener("close", () => {
     console.log(`WebSocket connection closed for call: ${callSid}`);
+    if (callId) {
+      cleanupCallBuffers(callId);
+    }
   });
 
   socket.addEventListener("error", (error) => {
@@ -86,13 +96,51 @@ serve(async (req) => {
 
 let audioBuffer: { [key: string]: Uint8Array[] } = {};
 let lastTranscriptTime: { [key: string]: number } = {};
+let activeCallSessions: Set<string> = new Set();
+
+// Clean up buffers for a specific call
+function cleanupCallBuffers(callId: string) {
+  const keysToDelete = Object.keys(audioBuffer).filter(key => key.startsWith(callId));
+  keysToDelete.forEach(key => {
+    delete audioBuffer[key];
+    delete lastTranscriptTime[key];
+  });
+  activeCallSessions.delete(callId);
+  console.log(`Cleaned up buffers for call: ${callId}`);
+}
+
+// Clean up old inactive buffers (older than 5 minutes)
+function cleanupOldBuffers() {
+  const now = Date.now();
+  const fiveMinutesAgo = now - (5 * 60 * 1000);
+  
+  Object.keys(lastTranscriptTime).forEach(key => {
+    if (lastTranscriptTime[key] < fiveMinutesAgo) {
+      delete audioBuffer[key];
+      delete lastTranscriptTime[key];
+      console.log(`Cleaned up old buffer: ${key}`);
+    }
+  });
+}
 
 async function processAudioMessage(message: any, callId: string, supabase: any) {
   try {
+    // Validate this is an active call session
+    if (!activeCallSessions.has(callId)) {
+      console.log(`Ignoring audio for inactive call: ${callId}`);
+      return;
+    }
+    
     console.log(`Received audio chunk for call ${callId}, sequence: ${message.sequenceNumber}, track: ${message.media.track}`);
     
     const track = message.media.track;
     const audioData = message.media.payload;
+    
+    // Validate track (should only be 'inbound' or 'outbound')
+    if (!['inbound', 'outbound'].includes(track)) {
+      console.log(`Invalid track: ${track}, ignoring audio`);
+      return;
+    }
     
     // Initialize buffers for this call if not exists
     const bufferKey = `${callId}-${track}`;

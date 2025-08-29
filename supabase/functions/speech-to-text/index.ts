@@ -144,26 +144,43 @@ serve(async (req) => {
     
     console.log(`Transcription result for ${track}: ${transcribedText}`);
 
-    // Filter out poor quality transcriptions
+    // Enhanced transcript validation
     const isValidTranscript = (text: string): boolean => {
       const trimmedText = text.trim().toLowerCase();
       
       // Filter out very short transcripts (likely noise)
       if (trimmedText.length < 3) return false;
       
-      // Filter out common false positives from background noise
+      // Filter out common false positives and system sounds
       const falsePositives = [
         'thank you', 'thanks', 'you', 'yeah', 'yes', 'no', 'ok', 'okay',
-        'um', 'uh', 'ah', 'oh', 'hmm', 'mm'
+        'um', 'uh', 'ah', 'oh', 'hmm', 'mm', 'hello', 'hi', 'bye', 'goodbye',
+        'the', 'and', 'but', 'or', 'so', 'well', 'now', 'then', 'here', 'there',
+        'music', 'sound', 'noise', 'beep', 'ring', 'tone', 'click', 'buzz'
       ];
       
       // If it's only a false positive word, filter it out
       if (falsePositives.includes(trimmedText)) return false;
       
-      // If it contains only repetitive characters
+      // Filter out single character repeated
       if (/^(.)\1{2,}$/.test(trimmedText.replace(/\s/g, ''))) return false;
       
-      return true;
+      // Filter out common transcription errors (like system sounds)
+      const systemSounds = [
+        /^[a-z]\s*[a-z]\s*[a-z]$/,  // Single letters (a b c)
+        /^(la|na|da|ta|ka|pa|ba|ma|ra|sa|ha|wa|ya|ga|fa|va|za|ja|ca|xa){3,}$/,  // Repetitive syllables
+        /^\d+$/,  // Only numbers
+        /^[^\w\s]+$/,  // Only punctuation/symbols
+        /^(music|instrumental|singing|humming|whistling|breathing|coughing|sniffing)$/i  // Audio descriptions
+      ];
+      
+      if (systemSounds.some(pattern => pattern.test(trimmedText))) return false;
+      
+      // Must contain at least one word with 2+ characters
+      const words = trimmedText.split(/\s+/);
+      const hasValidWord = words.some(word => word.length >= 2 && /^[a-z]+$/.test(word));
+      
+      return hasValidWord;
     };
 
     // Only return valid transcripts
