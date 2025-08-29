@@ -15,6 +15,7 @@ export const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('signin');
   const [role, setRole] = useState<'customer' | 'agent'>('customer');
+  const [showLogout, setShowLogout] = useState(false);
   
   // Sign in form
   const [signInEmail, setSignInEmail] = useState('');
@@ -25,14 +26,20 @@ export const Auth = () => {
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpFullName, setSignUpFullName] = useState('');
   
-  const { signIn, signUp, user, userProfile } = useAuth();
+  const { signIn, signUp, signOut, user, userProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-
   useEffect(() => {
-    if (user && userProfile) {
-      // Redirect based on user role
+    // Check if this is a logout request
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    
+    if (action === 'logout') {
+      setShowLogout(true);
+      setActiveTab('logout');
+    } else if (user && userProfile) {
+      // Only redirect if we're not on the auth page for logout purposes
       if (userProfile.role === 'agent') {
         navigate('/agent');
       } else {
@@ -102,6 +109,28 @@ export const Auth = () => {
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await signOut();
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
+      navigate('/auth');
+      setShowLogout(false);
+      setActiveTab('signin');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -113,9 +142,10 @@ export const Auth = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              {showLogout && <TabsTrigger value="logout">Sign Out</TabsTrigger>}
             </TabsList>
             
             <TabsContent value="signin">
@@ -210,6 +240,44 @@ export const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
+            
+            {showLogout && (
+              <TabsContent value="logout" className="text-center space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">Sign Out</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You are currently signed in as {userProfile?.full_name || userProfile?.email}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Role: {userProfile?.role}
+                  </p>
+                </div>
+                <Button 
+                  onClick={handleLogout} 
+                  className="w-full" 
+                  disabled={isLoading}
+                  variant="destructive"
+                >
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Sign Out
+                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={() => {
+                      if (userProfile?.role === 'agent') {
+                        navigate('/agent');
+                      } else {
+                        navigate('/');
+                      }
+                    }}
+                  >
+                    Go Back to Dashboard
+                  </Button>
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>
