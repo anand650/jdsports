@@ -19,6 +19,8 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
+
   let callSid: string | null = null;
   let callId: string | null = null;
   let deepgramSocket: WebSocket | null = null;
@@ -53,51 +55,126 @@ serve(async (req) => {
             callId = callRecord.id;
             console.log(`Found call record: ${callId}`);
             
-            // Connect to Deepgram transcription service
+            // Connect directly to Deepgram
             try {
-              const deepgramUrl = `${Deno.env.get('SUPABASE_URL')?.replace('https://', 'wss://')}/functions/v1/deepgram-transcription`;
-              deepgramSocket = new WebSocket(deepgramUrl);
+              const deepgramUrl = `wss://api.deepgram.com/v1/listen?model=nova-2-phonecall&language=en&punctuate=true&interim_results=true&endpointing=300&utterance_end_ms=1000&smart_format=true`;
+              
+              deepgramSocket = new WebSocket(deepgramUrl, ['token', DEEPGRAM_API_KEY || '']);
               
               deepgramSocket.onopen = () => {
-                console.log('Connected to Deepgram transcription service');
-                deepgramSocket?.send(JSON.stringify({
-                  event: 'start',
-                  callId: callId
-                }));
+                console.log('Connected to Deepgram');
+              };
+              
+              deepgramSocket.onmessage = async (dgEvent) => {
+                try {
+                  const response = JSON.parse(dgEvent.data);
+                  
+                  if (response.type === 'Results') {
+                    const transcript = response.channel?.alternatives?.[0];
+                    
+                    if (transcript && transcript.transcript && transcript.transcript.trim()) {
+                      const text = transcript.transcript.trim();
+                      const isFinal = response.is_final;
+                      const confidence = transcript.confidence || 0;
+                      
+                      // Only process high-confidence final transcripts
+                      if (isFinal && confidence > 0.7 && text.length > 2) {
+                        console.log(`Final transcript: ${text} (confidence: ${confidence})`);
+                        
+                        // Determine speaker role based on track info
+                        // Twilio sends inbound track for customer, outbound for agent
+                        const role = 'customer'; // Default to customer for now
+                        
+                        // Insert transcript into database
+                        const { data: insertedTranscript, error: insertError } = await supabase
+                          .from('transcripts')
+                          .insert({
+                            call_id: callId,
+                            text: text,
+                            role: role,
+                            created_at: new Date().toISOString()
+                          })
+                          .select()
+                          .single();
+                          
+                        if (insertError) {
+                          console.error('Error inserting transcript:', insertError);
+                        } else {
+                          console.log(`Successfully inserted ${role} transcript:`, insertedTranscript);
+                          
+                          // Generate AI suggestion for customer messages
+                          if (role === 'customer') {
+                            try {
+                              console.log('Generating AI suggestion for customer message:', text);
+                              const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+                                body: { callId, customerMessage: text }
+                              });
+                              
+                              if (suggestionError) {
+                                console.error('Error generating suggestion:', suggestionError);
+                              } else {
+                                console.log('AI suggestion generated successfully:', suggestionData);
+                                
+                                // Insert the suggestion into the database
+                                const { error: suggestionInsertError } = await supabase
+                                  .from('suggestions')
+                                  .insert({
+                                    call_id: callId,
+                                    text: suggestionData.suggestion,
+                                    created_at: new Date().toISOString()
+                                  });
+                                  
+                                if (suggestionInsertError) {
+                                  console.error('Error inserting suggestion to database:', suggestionInsertError);
+                                } else {
+                                  console.log('Suggestion inserted to database successfully');
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Error calling generate-suggestion:', error);
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } else if (response.type === 'Metadata') {
+                    console.log('Deepgram metadata:', response);
+                  }
+                } catch (error) {
+                  console.error('Error processing Deepgram response:', error);
+                }
               };
               
               deepgramSocket.onerror = (error) => {
-                console.error('Deepgram connection error:', error);
+                console.error('Deepgram WebSocket error:', error);
               };
               
               deepgramSocket.onclose = () => {
-                console.log('Deepgram connection closed');
+                console.log('Deepgram WebSocket closed');
               };
               
             } catch (error) {
-              console.error('Error connecting to Deepgram service:', error);
+              console.error('Error connecting to Deepgram:', error);
             }
           }
           break;
           
         case 'media':
-          // Forward audio data to Deepgram transcription service
+          // Forward audio data directly to Deepgram
           if (deepgramSocket && deepgramSocket.readyState === WebSocket.OPEN && message.media) {
-            deepgramSocket.send(JSON.stringify({
-              event: 'media',
-              media: message.media,
-              track: message.media.track
-            }));
+            // Convert base64 audio to binary and send to Deepgram
+            try {
+              const audioData = Uint8Array.from(atob(message.media.payload), c => c.charCodeAt(0));
+              deepgramSocket.send(audioData);
+            } catch (error) {
+              console.error('Error processing audio data:', error);
+            }
           }
           break;
           
         case 'stop':
           console.log(`Media stream stopped for call: ${callSid}`);
           if (deepgramSocket && deepgramSocket.readyState === WebSocket.OPEN) {
-            deepgramSocket.send(JSON.stringify({
-              event: 'stop',
-              callId: callId
-            }));
             deepgramSocket.close();
           }
           break;
