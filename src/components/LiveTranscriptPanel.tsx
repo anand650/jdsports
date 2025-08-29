@@ -36,6 +36,8 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
       return;
     }
 
+    console.log('Loading transcripts for call ID:', callId);
+
     const loadTranscripts = async () => {
       setIsLoading(true);
       try {
@@ -46,6 +48,7 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           .order('created_at', { ascending: true });
 
         if (error) throw error;
+        console.log('Loaded existing transcripts:', data?.length || 0);
         setTranscripts(data || []);
       } catch (error) {
         console.error('Error loading transcripts:', error);
@@ -68,6 +71,7 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           filter: `call_id=eq.${callId}`
         },
         (payload) => {
+          console.log('New transcript received:', payload.new);
           const newTranscript = payload.new as Transcript;
           setTranscripts(prev => [...prev, newTranscript]);
         }
