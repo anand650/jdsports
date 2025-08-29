@@ -55,10 +55,10 @@ print_status "Waiting for application to start..."
 sleep 10
 
 # Check if the application is running
-if curl -f http://localhost:3000/health > /dev/null 2>&1; then
+if curl -f http://localhost:9090/health > /dev/null 2>&1; then
     print_status "✅ Application is running successfully!"
-    print_status "🌐 Access your application at: http://your-domain.com:3000"
-    print_status "📊 Health check: http://your-domain.com:3000/health"
+    print_status "🌐 Access your application at: http://your-domain.com:9090"
+    print_status "📊 Health check: http://your-domain.com:9090/health"
 else
     print_error "❌ Application failed to start. Check logs with: docker-compose logs"
     exit 1

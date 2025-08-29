@@ -173,7 +173,7 @@ sudo systemctl restart nginx
 ```bash
 # Install UFW (Ubuntu) or configure iptables (CentOS)
 sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 3000/tcp  # HTTP (JD Sports AI)
+sudo ufw allow 9090/tcp  # HTTP (JD Sports AI)
 sudo ufw allow 443/tcp   # HTTPS
 sudo ufw enable
 ```
@@ -263,6 +263,6 @@ If you encounter any issues:
 
 Your JD Sports AI Assistant is now running on Hostinger VPS! 
 
-**Access your application at:** `http://your-domain.com:3000` or `http://your-vps-ip:3000`
+**Access your application at:** `http://your-domain.com:9090` or `http://your-vps-ip:9090`
 
-**Health check:** `http://your-domain.com:3000/health`
+**Health check:** `http://your-domain.com:9090/health`

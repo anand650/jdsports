@@ -62,8 +62,8 @@ VITE_VAPI_API_KEY=your_vapi_api_key
 
 ### 5. **Access Your Application**
 
-🌐 **URL:** `http://your-vps-ip:3000` or `http://your-domain.com:3000`
-📊 **Health Check:** `http://your-vps-ip:3000/health`
+🌐 **URL:** `http://your-vps-ip:9090` or `http://your-domain.com:9090`
+📊 **Health Check:** `http://your-vps-ip:9090/health`
 
 ## 🔧 Management Commands
 
