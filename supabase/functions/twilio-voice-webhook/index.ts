@@ -112,24 +112,18 @@ serve(async (req) => {
           .update({ agent_id: availableAgents[0].id })
           .eq('twilio_call_sid', CallSid as string);
 
-        // Generate TwiML with native Twilio transcription enabled
+        // Generate TwiML with WebSocket stream for AssemblyAI transcription
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Say voice="alice">Connecting you to our agent.</Say>
+          <Start>
+            <Stream url="wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream" />
+          </Start>
           <Dial timeout="30" 
                 record="record-from-ringing" 
                 recordingStatusCallback="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-call-status">
             <Client>agent</Client>
           </Dial>
-          <Start>
-            <Transcription
-              name="live_transcription"
-              track="both_tracks"
-              transcriptionEngine="default"
-              partialResults="true"
-              statusCallbackUrl="https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-transcription"
-              statusCallbackMethod="POST" />
-          </Start>
         </Response>`;
 
         return new Response(twiml, {
