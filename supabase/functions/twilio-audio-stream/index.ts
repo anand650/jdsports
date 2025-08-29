@@ -154,23 +154,36 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
             const role = track === 'inbound' ? 'customer' : 'agent';
             const transcriptText = transcriptionResult.text.trim();
             
-            // Check for duplicate transcripts to avoid spam
+            // Enhanced duplicate and quality check
             const { data: recentTranscripts } = await supabase
               .from('transcripts')
               .select('text, created_at')
               .eq('call_id', callId)
               .eq('role', role)
               .order('created_at', { ascending: false })
-              .limit(3);
+              .limit(10);
             
-            // Skip if this exact text was transcribed in the last 10 seconds
+            // Skip if this exact text was transcribed in the last 30 seconds
             const isDuplicate = recentTranscripts?.some(transcript => 
               transcript.text === transcriptText && 
-              (Date.now() - new Date(transcript.created_at).getTime()) < 10000
+              (Date.now() - new Date(transcript.created_at).getTime()) < 30000
             );
             
-            if (isDuplicate) {
-              console.log(`Skipping duplicate transcript: ${transcriptText}`);
+            // Skip if very similar text (>80% similarity) was transcribed recently
+            const isSimilar = recentTranscripts?.some(transcript => {
+              const similarity = getSimilarity(transcript.text, transcriptText);
+              const timeDiff = Date.now() - new Date(transcript.created_at).getTime();
+              return similarity > 0.8 && timeDiff < 15000;
+            });
+            
+            // Skip incomplete fragments or low-quality transcripts
+            const isLowQuality = transcriptText.length < 5 || 
+                                 transcriptText.split(' ').length < 2 ||
+                                 /^(uh|um|ah|er|hmm|well|so|like|you know)\s*$/i.test(transcriptText) ||
+                                 /^(thank you|thanks|ok|okay|yes|no|yeah|yep)\s*$/i.test(transcriptText);
+            
+            if (isDuplicate || isSimilar || isLowQuality) {
+              console.log(`Skipping ${isDuplicate ? 'duplicate' : isSimilar ? 'similar' : 'low-quality'} transcript: ${transcriptText}`);
               return;
             }
             
@@ -243,4 +256,18 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
   } catch (error) {
     console.error('Error processing audio message:', error);
   }
+}
+
+// Helper function to calculate text similarity
+function getSimilarity(text1: string, text2: string): number {
+  const words1 = text1.toLowerCase().split(/\s+/);
+  const words2 = text2.toLowerCase().split(/\s+/);
+  
+  if (words1.length === 0 && words2.length === 0) return 1;
+  if (words1.length === 0 || words2.length === 0) return 0;
+  
+  const intersection = words1.filter(word => words2.includes(word));
+  const union = [...new Set([...words1, ...words2])];
+  
+  return intersection.length / union.length;
 }

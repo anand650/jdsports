@@ -301,13 +301,15 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
                       <Tag className="h-4 w-4" />
                       <span>Tags</span>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {customerData.profile.tags.map((tag, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
+                    <ScrollArea className="max-h-20">
+                      <div className="flex flex-wrap gap-1 pr-2">
+                        {customerData.profile.tags.map((tag, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
                 )}
 
