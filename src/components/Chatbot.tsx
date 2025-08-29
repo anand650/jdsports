@@ -384,7 +384,12 @@ export const Chatbot = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={requestHumanAgent}
+                          onClick={(e) => {
+                            console.log('🔴 Talk to Human Agent button clicked!');
+                            e.preventDefault();
+                            e.stopPropagation();
+                            requestHumanAgent();
+                          }}
                           className="mt-2 w-full"
                         >
                           <AlertTriangle className="h-3 w-3 mr-1" />
