@@ -59,6 +59,9 @@ verify_jwt = false
 [functions.twilio-audio-stream]
 verify_jwt = false
 
+[functions.twilio-audio-stream-v2]
+verify_jwt = false
+
 [functions.twilio-call-controls]
 verify_jwt = false
 

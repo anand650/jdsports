@@ -54,7 +54,7 @@ serve(async (req) => {
     try {
       // Start live transcription on the call
       const stream = await client.calls(callRecord.twilio_call_sid).streams.create({
-        url: `wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream`,
+        url: `wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream-v2`,
         name: 'transcription-stream',
         track: 'both_tracks'
       });
