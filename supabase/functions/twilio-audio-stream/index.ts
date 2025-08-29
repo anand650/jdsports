@@ -240,17 +240,13 @@ serve(async (req) => {
       "wss://api.deepgram.com/v1/listen?model=phonecall&encoding=mulaw&sample_rate=8000&punctuate=true&interim_results=true&smart_format=true&diarize=true&endpointing=300&utterance_end_ms=1000";
 
     try {
-      // @ts-ignore WebSocketStream is in Deno
-      const dgWss = new WebSocketStream(dgUrl, {
+      dgSocket = new WebSocket(dgUrl, [], {
         headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
       });
-      const { socket: ws } = await dgWss.connection;
-      dgSocket = ws;
 
-      // 🔹 New detailed lifecycle logs
       dgSocket.addEventListener("open", () => {
         dgOpen = true;
-        console.log("✅ Deepgram WebSocket OPENED");
+        console.log("✅ Connected to Deepgram (plain WebSocket)");
 
         if (pendingFrames.length) {
           console.log(`▶️ Flushing ${pendingFrames.length} buffered frames to Deepgram`);
@@ -266,10 +262,9 @@ serve(async (req) => {
       });
 
       dgSocket.addEventListener("message", async (evt) => {
-        console.log("📩 Deepgram raw message:", evt.data); // log raw before parsing
         try {
           const msg = JSON.parse(evt.data as string);
-          console.log("📩 Deepgram parsed message:", JSON.stringify(msg));
+          console.log("📩 Deepgram message:", JSON.stringify(msg));
 
           if (msg.type === "Results") {
             const isFinal: boolean = !!msg.is_final;
@@ -338,13 +333,13 @@ serve(async (req) => {
         }
       });
 
-      dgSocket.addEventListener("close", (evt) => {
+      dgSocket.addEventListener("close", () => {
         dgOpen = false;
-        console.log(`🔌 Deepgram WebSocket CLOSED (code=${evt.code}, reason=${evt.reason})`);
+        console.log("🔌 Deepgram WebSocket closed");
       });
 
       dgSocket.addEventListener("error", (e) => {
-        console.error("❌ Deepgram WebSocket ERROR:", e);
+        console.error("❌ Deepgram WebSocket error:", e);
       });
     } catch (e) {
       console.error("❌ Failed to connect to Deepgram:", e);
