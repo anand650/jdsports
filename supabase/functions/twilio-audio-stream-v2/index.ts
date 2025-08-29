@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
       const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
         method: "POST",
         headers: {
-          authorization: ASSEMBLYAI_API_KEY,
+           authorization: `Bearer ${ASSEMBLYAI_API_KEY}`,
           "content-type": "application/json",
         },
       });
