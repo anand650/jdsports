@@ -76,7 +76,10 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           setTranscripts(prev => [...prev, newTranscript]);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+        console.log('Subscribed to call_id:', callId);
+      });
 
     return () => {
       supabase.removeChannel(channel);
