@@ -79,29 +79,49 @@ serve(async (req) => {
                   const role = message.track === 'inbound' ? 'customer' : 'agent';
                   
                   // Insert transcript into database
-                  const { error: insertError } = await supabase
+                  const { data: insertedTranscript, error: insertError } = await supabase
                     .from('transcripts')
                     .insert({
                       call_id: callId,
                       text: text,
                       role: role,
                       created_at: new Date().toISOString()
-                    });
+                    })
+                    .select()
+                    .single();
                     
                   if (insertError) {
                     console.error('Error inserting transcript:', insertError);
                   } else {
-                    console.log(`Inserted ${role} transcript: ${text}`);
+                    console.log(`Successfully inserted ${role} transcript:`, insertedTranscript);
                     
                     // Generate AI suggestion for customer messages
                     if (role === 'customer') {
                       try {
-                        const { error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+                        console.log('Generating AI suggestion for customer message:', text);
+                        const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
                           body: { callId, customerMessage: text }
                         });
                         
                         if (suggestionError) {
                           console.error('Error generating suggestion:', suggestionError);
+                        } else {
+                          console.log('AI suggestion generated successfully:', suggestionData);
+                          
+                          // Insert the suggestion into the database
+                          const { error: suggestionInsertError } = await supabase
+                            .from('suggestions')
+                            .insert({
+                              call_id: callId,
+                              text: suggestionData.suggestion,
+                              created_at: new Date().toISOString()
+                            });
+                            
+                          if (suggestionInsertError) {
+                            console.error('Error inserting suggestion to database:', suggestionInsertError);
+                          } else {
+                            console.log('Suggestion inserted to database successfully');
+                          }
                         }
                       } catch (error) {
                         console.error('Error calling generate-suggestion:', error);

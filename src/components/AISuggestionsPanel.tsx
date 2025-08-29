@@ -31,6 +31,8 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
       return;
     }
 
+    console.log('Loading suggestions for call ID:', callId);
+
     const loadSuggestions = async () => {
       setIsLoading(true);
       try {
@@ -41,6 +43,7 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        console.log('Loaded existing suggestions:', data?.length || 0, 'for call:', callId);
         setSuggestions(data || []);
       } catch (error) {
         console.error('Error loading suggestions:', error);
@@ -51,9 +54,10 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
 
     loadSuggestions();
 
-    // Subscribe to new suggestions
+    // Subscribe to new suggestions with a unique channel name
+    const channelName = `suggestions:${callId}`;
     const channel = supabase
-      .channel('suggestion-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -63,13 +67,23 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
           filter: `call_id=eq.${callId}`
         },
         (payload) => {
+          console.log('New suggestion received via realtime:', payload.new);
           const newSuggestion = payload.new as Suggestion;
-          setSuggestions(prev => [newSuggestion, ...prev]);
+          setSuggestions(prev => {
+            // Avoid duplicates
+            if (prev.find(s => s.id === newSuggestion.id)) {
+              return prev;
+            }
+            return [newSuggestion, ...prev];
+          });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime suggestion subscription status:', status, 'for call:', callId);
+      });
 
     return () => {
+      console.log('Removing suggestion channel:', channelName);
       supabase.removeChannel(channel);
     };
   }, [callId]);

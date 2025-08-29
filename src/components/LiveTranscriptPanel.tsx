@@ -48,7 +48,7 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           .order('created_at', { ascending: true });
 
         if (error) throw error;
-        console.log('Loaded existing transcripts:', data?.length || 0);
+        console.log('Loaded existing transcripts:', data?.length || 0, 'for call:', callId);
         setTranscripts(data || []);
       } catch (error) {
         console.error('Error loading transcripts:', error);
@@ -59,9 +59,10 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
 
     loadTranscripts();
 
-    // Subscribe to new transcripts
+    // Subscribe to new transcripts with a unique channel name
+    const channelName = `transcripts:${callId}`;
     const channel = supabase
-      .channel('transcript-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -71,17 +72,23 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
           filter: `call_id=eq.${callId}`
         },
         (payload) => {
-          console.log('New transcript received:', payload.new);
+          console.log('New transcript received via realtime:', payload.new);
           const newTranscript = payload.new as Transcript;
-          setTranscripts(prev => [...prev, newTranscript]);
+          setTranscripts(prev => {
+            // Avoid duplicates
+            if (prev.find(t => t.id === newTranscript.id)) {
+              return prev;
+            }
+            return [...prev, newTranscript];
+          });
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
-        console.log('Subscribed to call_id:', callId);
+        console.log('Realtime transcript subscription status:', status, 'for call:', callId);
       });
 
     return () => {
+      console.log('Removing transcript channel:', channelName);
       supabase.removeChannel(channel);
     };
   }, [callId]);
