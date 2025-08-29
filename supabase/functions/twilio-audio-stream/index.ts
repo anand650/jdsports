@@ -42,10 +42,15 @@ Deno.serve(async (req) => {
   let aaiSocket: WebSocket | null = null;
   let isConnected = false;
 
-  // Simplified AssemblyAI connection
+  // Simplified AssemblyAI connection with extensive debugging
   async function connectToAssemblyAI() {
     try {
-      console.log("🚀 Connecting to AssemblyAI...");
+      console.log("🚀 [DEBUG] Starting AssemblyAI connection process...");
+      console.log("🔑 [DEBUG] API Key exists:", !!ASSEMBLYAI_API_KEY);
+      console.log("🔑 [DEBUG] API Key length:", ASSEMBLYAI_API_KEY?.length);
+      console.log("🔑 [DEBUG] API Key prefix:", ASSEMBLYAI_API_KEY?.substring(0, 10) + "...");
+      
+      console.log("📡 [DEBUG] Making token request to AssemblyAI...");
       
       // Get token
       const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
@@ -61,9 +66,13 @@ Deno.serve(async (req) => {
         })
       });
 
+      console.log("📡 [DEBUG] Token response status:", tokenResponse.status);
+      console.log("📡 [DEBUG] Token response ok:", tokenResponse.ok);
+
       if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
-        console.error("❌ Token request failed:", tokenResponse.status, errorText);
+        console.error("❌ [ERROR] Token request failed:", tokenResponse.status, errorText);
+        console.error("❌ [ERROR] Response headers:", [...tokenResponse.headers.entries()]);
         throw new Error(`Token failed: ${tokenResponse.status}`);
       }
 
