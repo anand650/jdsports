@@ -208,7 +208,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
 
 serve(async (req) => {
-  // Only accept WebSocket upgrade from Twilio Media Streams
   if (req.headers.get("upgrade") !== "websocket") {
     return new Response("Expected websocket", { status: 400 });
   }
@@ -216,29 +215,24 @@ serve(async (req) => {
   const { socket, response } = Deno.upgradeWebSocket(req);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-  const SUPABASE_SERVICE_ROLE_KEY =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY") ?? "";
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Track state
   let callSid: string | null = null;
   let callId: string | null = null;
-
-  // Keep the latest Twilio track we saw; helps assign role on final transcripts
   let lastTrack: "inbound" | "outbound" | null = null;
 
   let dgSocket: WebSocket | null = null;
   let dgOpen = false;
   const pendingFrames: Uint8Array[] = [];
 
-  const b64ToU8 = (b64: string) =>
-    Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const b64ToU8 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
   async function connectDeepgram() {
     if (!DEEPGRAM_API_KEY) {
-      console.error("DEEPGRAM_API_KEY missing");
+      console.error("❌ DEEPGRAM_API_KEY missing");
       return;
     }
 
@@ -246,29 +240,34 @@ serve(async (req) => {
       "wss://api.deepgram.com/v1/listen?model=phonecall&encoding=mulaw&sample_rate=8000&punctuate=true&interim_results=true&smart_format=true&diarize=true&endpointing=300&utterance_end_ms=1000";
 
     try {
-      // Authenticate using Deepgram’s WebSocket subprotocol
-      dgSocket = new WebSocket(dgUrl, ["token", DEEPGRAM_API_KEY]);
+      // @ts-ignore WebSocketStream is in Deno
+      const dgWss = new WebSocketStream(dgUrl, {
+        headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
+      });
+      const { socket: ws } = await dgWss.connection;
+      dgSocket = ws;
 
-      dgSocket.onopen = () => {
+      dgSocket.addEventListener("open", () => {
         dgOpen = true;
-        console.log("Connected to Deepgram");
+        console.log("✅ Connected to Deepgram");
 
-        // Flush buffered frames
         if (pendingFrames.length) {
+          console.log(`▶️ Flushing ${pendingFrames.length} buffered frames to Deepgram`);
           for (const frame of pendingFrames) {
             try {
               dgSocket?.send(frame.buffer);
             } catch (e) {
-              console.error("Error sending buffered frame to Deepgram:", e);
+              console.error("❌ Error sending buffered frame to Deepgram:", e);
             }
           }
           pendingFrames.length = 0;
         }
-      };
+      });
 
-      dgSocket.onmessage = async (evt) => {
+      dgSocket.addEventListener("message", async (evt) => {
         try {
           const msg = JSON.parse(evt.data as string);
+          console.log("📩 Deepgram message:", JSON.stringify(msg));
 
           if (msg.type === "Results") {
             const isFinal: boolean = !!msg.is_final;
@@ -276,95 +275,97 @@ serve(async (req) => {
             const text: string = (alt?.transcript ?? "").trim();
             const confidence: number = alt?.confidence ?? 0;
 
-            if (!text) return;
+            if (!text) {
+              console.log("ℹ️ Empty interim transcript ignored");
+              return;
+            }
+
+            console.log(`📝 Transcript received | final=${isFinal} | conf=${confidence} | text="${text}"`);
 
             if (isFinal && confidence >= 0.5) {
-              const role =
-                lastTrack === "outbound"
-                  ? "agent"
-                  : "customer";
+              const role = lastTrack === "outbound" ? "agent" : "customer";
+              console.log(`💾 Saving transcript for role=${role}, callId=${callId}`);
 
               if (!callId) {
-                console.warn("Final transcript but callId not ready:", text);
+                console.warn("⚠️ Final transcript but callId not ready:", text);
                 return;
               }
 
-              const { error: insertErr } = await supabase
-                .from("transcripts")
-                .insert({
-                  call_id: callId,
-                  role,
-                  text,
-                  created_at: new Date().toISOString(),
-                });
+              const { error: insertErr } = await supabase.from("transcripts").insert({
+                call_id: callId,
+                role,
+                text,
+                created_at: new Date().toISOString(),
+              });
 
               if (insertErr) {
-                console.error("Error inserting transcript:", insertErr);
+                console.error("❌ Error inserting transcript:", insertErr);
               } else {
+                console.log("✅ Transcript inserted into DB");
+
                 if (role === "customer") {
+                  console.log("🤖 Invoking suggestion generator...");
                   try {
-                    const { data: sugData, error: sugErr } =
-                      await supabase.functions.invoke("generate-suggestion", {
-                        body: { callId, customerMessage: text },
-                      });
+                    const { data: sugData, error: sugErr } = await supabase.functions.invoke("generate-suggestion", {
+                      body: { callId, customerMessage: text },
+                    });
                     if (sugErr) {
-                      console.error("generate-suggestion error:", sugErr);
+                      console.error("❌ generate-suggestion error:", sugErr);
                     } else if (sugData?.suggestion) {
-                      const { error: sugInsErr } = await supabase
-                        .from("suggestions")
-                        .insert({
-                          call_id: callId,
-                          text: sugData.suggestion,
-                          created_at: new Date().toISOString(),
-                        });
+                      console.log("💾 Inserting AI suggestion:", sugData.suggestion);
+                      const { error: sugInsErr } = await supabase.from("suggestions").insert({
+                        call_id: callId,
+                        text: sugData.suggestion,
+                        created_at: new Date().toISOString(),
+                      });
                       if (sugInsErr) {
-                        console.error(
-                          "Error inserting suggestion:",
-                          sugInsErr,
-                        );
+                        console.error("❌ Error inserting suggestion:", sugInsErr);
+                      } else {
+                        console.log("✅ Suggestion inserted into DB");
                       }
                     }
                   } catch (e) {
-                    console.error("Error invoking generate-suggestion:", e);
+                    console.error("❌ Error invoking generate-suggestion:", e);
                   }
                 }
               }
             }
           }
         } catch (e) {
-          console.error("Error parsing Deepgram message:", e);
+          console.error("❌ Error parsing Deepgram message:", e);
         }
-      };
+      });
 
-      dgSocket.onerror = (e) => {
-        console.error("Deepgram WebSocket error:", e);
-      };
-
-      dgSocket.onclose = () => {
+      dgSocket.addEventListener("close", () => {
         dgOpen = false;
-        console.log("Deepgram WebSocket closed");
-      };
+        console.log("🔌 Deepgram WebSocket closed");
+      });
+
+      dgSocket.addEventListener("error", (e) => {
+        console.error("❌ Deepgram WebSocket error:", e);
+      });
     } catch (e) {
-      console.error("Failed to connect to Deepgram:", e);
+      console.error("❌ Failed to connect to Deepgram:", e);
     }
   }
 
   socket.addEventListener("open", () => {
-    console.log("Twilio Media Streams WS opened");
+    console.log("🌐 Twilio Media Streams WS opened");
   });
 
   socket.addEventListener("message", async (event) => {
     try {
       const msg = JSON.parse(event.data);
+      console.log("📨 Twilio event:", msg.event);
 
       switch (msg.event) {
         case "connected":
-          console.log("Twilio connected");
+          console.log("🔗 Twilio connected");
           break;
 
         case "start": {
           callSid = msg?.start?.callSid ?? null;
-          console.log("Twilio start for CallSid:", callSid);
+          console.log("▶️ Twilio start for CallSid:", callSid);
 
           if (callSid) {
             const { data: callRec, error } = await supabase
@@ -373,10 +374,10 @@ serve(async (req) => {
               .eq("twilio_call_sid", callSid)
               .single();
             if (error) {
-              console.error("Error fetching call record:", error);
+              console.error("❌ Error fetching call record:", error);
             } else if (callRec) {
               callId = callRec.id;
-              console.log("Mapped to call_id:", callId);
+              console.log("✅ Mapped to call_id:", callId);
             }
           }
 
@@ -386,51 +387,52 @@ serve(async (req) => {
 
         case "media": {
           const track = msg?.media?.track as "inbound" | "outbound" | undefined;
-          if (track === "inbound" || track === "outbound") {
+          if (track) {
             lastTrack = track;
+            console.log(`🎙️ Media frame received from Twilio, track=${track}`);
           }
 
           const b64 = msg?.media?.payload as string | undefined;
           if (!b64) break;
 
           const frame = b64ToU8(b64);
+          console.log(`📦 Audio frame size=${frame.length} bytes`);
 
           if (dgOpen && dgSocket?.readyState === WebSocket.OPEN) {
             try {
               dgSocket.send(frame.buffer);
+              console.log("➡️ Sent audio frame to Deepgram");
             } catch (e) {
-              console.error("Error sending frame to Deepgram:", e);
+              console.error("❌ Error sending frame to Deepgram:", e);
             }
           } else {
+            console.log("⏳ Deepgram not ready, buffering frame");
             pendingFrames.push(frame);
           }
           break;
         }
 
         case "stop":
-          console.log("Twilio stop for CallSid:", callSid);
+          console.log("⏹️ Twilio stop for CallSid:", callSid);
           try {
             dgSocket?.close();
           } catch {}
           break;
-
-        default:
-          break;
       }
     } catch (e) {
-      console.error("Error processing Twilio message:", e);
+      console.error("❌ Error processing Twilio message:", e);
     }
   });
 
   socket.addEventListener("close", () => {
-    console.log("Twilio WS closed for CallSid:", callSid);
+    console.log("🔌 Twilio WS closed for CallSid:", callSid);
     try {
       dgSocket?.close();
     } catch {}
   });
 
   socket.addEventListener("error", (e) => {
-    console.error("Twilio WS error:", e);
+    console.error("❌ Twilio WS error:", e);
   });
 
   return response;
