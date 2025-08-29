@@ -98,7 +98,6 @@ Deno.serve(async (req) => {
       
       assemblySocket = new WebSocket(
         `wss://streaming.assemblyai.com/v3/ws?sample_rate=8000&format_turns=true`,
-        [],
         {
           headers: {
             "Authorization": ASSEMBLYAI_API_KEY
