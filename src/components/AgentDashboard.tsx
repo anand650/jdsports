@@ -32,7 +32,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
   }, [selectedSession]);
 
   useEffect(() => {
-    // Subscribe to new chat sessions
+    // Subscribe to new chat sessions - listen for both escalated sessions and newly created ones
     const sessionsChannel = supabase
       .channel('chat_sessions_agent')
       .on(
@@ -40,58 +40,103 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'chat_sessions',
-          filter: 'status=eq.escalated'
+          table: 'chat_sessions'
         },
         async (payload) => {
           const session = payload.new as ChatSession;
           
-          // Fetch complete session with user details
-          const { data: sessionData } = await supabase
-            .from('chat_sessions')
-            .select(`
-              *,
-              users!chat_sessions_user_id_fkey(id, full_name, email)
-            `)
-            .eq('id', session.id)
-            .single();
+          // Only handle sessions that are escalated or need agent attention
+          if (session.status === 'escalated') {
+            // Fetch complete session with user details
+            const { data: sessionData } = await supabase
+              .from('chat_sessions')
+              .select(`
+                *,
+                users!chat_sessions_user_id_fkey(id, full_name, email)
+              `)
+              .eq('id', session.id)
+              .single();
 
-          if (sessionData) {
-            const sessionWithUser = {
-              ...sessionData,
-              user: sessionData.users || null
-            } as ChatSession;
+            if (sessionData) {
+              const sessionWithUser = {
+                ...sessionData,
+                user: sessionData.users || null
+              } as ChatSession;
 
-            setActiveSessions(prev => {
-              const exists = prev.find(s => s.id === session.id);
-              if (exists) {
-                return prev.map(s => s.id === session.id ? sessionWithUser : s);
-              } else {
-                return [sessionWithUser, ...prev];
-              }
-            });
+              setActiveSessions(prev => {
+                const exists = prev.find(s => s.id === session.id);
+                if (exists) {
+                  return prev.map(s => s.id === session.id ? sessionWithUser : s);
+                } else {
+                  return [sessionWithUser, ...prev];
+                }
+              });
 
-            // Enhanced notification with customer details
-            const customerName = sessionWithUser.user?.full_name || sessionWithUser.user?.email || 'Anonymous User';
-            
-            // Show prominent notification
-            setNewSessionNotification(sessionWithUser);
-            
-            toast({
-              title: "🔔 New Chat Escalated",
-              description: `${customerName} needs human assistance`,
-            });
+              // Enhanced notification with customer details
+              const customerName = sessionWithUser.user?.full_name || sessionWithUser.user?.email || 'Anonymous User';
+              
+              // Show prominent notification
+              setNewSessionNotification(sessionWithUser);
+              
+              toast({
+                title: "🔔 New Chat Escalated",
+                description: `${customerName} needs human assistance`,
+              });
 
-            // Play notification sound (optional)
-            try {
-              const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwYZaLvt559NEAxQp+PwtmMcBjiR1/LKdSEBMXfK5tCSKAUbV6+Z4pVJExBQr+r2vGciBSWL3PWteRwBJYPO8duKMgYYaLHf54lKDgpPr+n4vWcjByqG2+7D0yIFJIbN78CQPwAAaLfq4IpLDwdQr+j8oWwf');
-              audio.volume = 0.3;
-              audio.play().catch(() => {}); // Ignore if audio fails
-            } catch (e) {}
+              // Play notification sound (optional)
+              try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwYZaLvt559NEAxQp+PwtmMcBjiR1/LKdSEBMXfK5tCSKAUbV6+Z4pVJExBQr+r2vGciBSWL3PWteRwBJYPO8duKMgYYaLHf54lKDgpPr+n4vWcjByqG2+7D0yIFJIbN78CQPwAAaLfq4IpLDwdQr+j8oWwf');
+                audio.volume = 0.3;
+                audio.play().catch(() => {}); // Ignore if audio fails
+              } catch (e) {}
+            }
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_sessions',
+          filter: 'status=eq.escalated'
+        },
+        async (payload) => {
+          // Handle newly created escalated sessions
+          const session = payload.new as ChatSession;
+          await handleNewEscalatedSession(session);
+        }
+      )
       .subscribe();
+
+    // Helper function to handle new escalated sessions
+    const handleNewEscalatedSession = async (session: ChatSession) => {
+      const { data: sessionData } = await supabase
+        .from('chat_sessions')
+        .select(`
+          *,
+          users!chat_sessions_user_id_fkey(id, full_name, email)
+        `)
+        .eq('id', session.id)
+        .single();
+
+      if (sessionData) {
+        const sessionWithUser = {
+          ...sessionData,
+          user: sessionData.users || null
+        } as ChatSession;
+
+        setActiveSessions(prev => [sessionWithUser, ...prev]);
+        
+        const customerName = sessionWithUser.user?.full_name || sessionWithUser.user?.email || 'Anonymous User';
+        setNewSessionNotification(sessionWithUser);
+        
+        toast({
+          title: "🔔 New Chat Escalated",
+          description: `${customerName} needs human assistance`,
+        });
+      }
+    };
 
     // Subscribe to messages for selected session
     let messagesChannel: any = null;
