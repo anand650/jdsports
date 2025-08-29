@@ -54,6 +54,47 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
 
+    // Check if session is escalated or assigned to a human agent
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('chat_sessions')
+      .select('status, assigned_agent_id')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError) {
+      console.error('Error fetching session:', sessionError);
+      throw new Error('Failed to verify session status');
+    }
+
+    // If session is escalated or assigned to human agent, don't process AI response
+    if (sessionData.status === 'escalated' || sessionData.status === 'closed' || sessionData.assigned_agent_id) {
+      console.log('Session is handled by human agent, skipping AI response');
+      
+      // Save user message to database but don't generate AI response
+      const { error: userMessageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId,
+          sender_type: 'user',
+          content: message,
+          metadata: { user_id: userId || null, blocked_ai_response: true }
+        });
+
+      if (userMessageError) {
+        console.error('Error saving user message:', userMessageError);
+      }
+
+      return new Response(JSON.stringify({
+        message: "A human agent is now handling your chat. They will respond to you shortly.",
+        needsEscalation: false,
+        humanTakeover: true,
+        contextUsed: { message: 'Human agent takeover - AI response blocked' },
+        success: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Generate embedding for the user's message for semantic search
     const queryEmbedding = await generateEmbedding(message);
 

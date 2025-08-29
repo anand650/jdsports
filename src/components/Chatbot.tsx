@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MessageCircle, X, Send, User, Bot, AlertTriangle, Database, ShoppingCart } from 'lucide-react';
+import { MessageCircle, X, Send, User, Bot, AlertTriangle, Database, ShoppingCart, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessage, ChatSession } from '@/types/ecommerce';
 import { useToast } from '@/components/ui/use-toast';
@@ -34,7 +34,7 @@ export const Chatbot = () => {
   useEffect(() => {
     if (session) {
       // Subscribe to real-time messages to avoid duplicates
-      const channel = supabase
+      const messagesChannel = supabase
         .channel('chat_messages')
         .on(
           'postgres_changes',
@@ -57,11 +57,49 @@ export const Chatbot = () => {
         )
         .subscribe();
 
+      // Subscribe to session updates to detect human agent takeover
+      const sessionChannel = supabase
+        .channel('chat_session_updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'chat_sessions',
+            filter: `id=eq.${session.id}`
+          },
+          (payload) => {
+            const updatedSession = payload.new as ChatSession;
+            setSession(updatedSession);
+            
+            // If human agent took over, notify user and disable escalation
+            if (updatedSession.assigned_agent_id && updatedSession.status === 'escalated') {
+              setNeedsEscalation(false);
+              const agentTakeoverMessage: ChatMessage = {
+                id: `agent_takeover_${Date.now()}`,
+                session_id: session.id,
+                sender_type: 'ai',
+                content: "🎧 A human customer service agent has joined the chat and will assist you from now on. Please continue the conversation with them.",
+                metadata: { is_agent_takeover: true },
+                created_at: new Date().toISOString()
+              };
+              setMessages(prev => [...prev, agentTakeoverMessage]);
+              
+              toast({
+                title: "Human Agent Connected",
+                description: "A customer service representative is now handling your chat",
+              });
+            }
+          }
+        )
+        .subscribe();
+
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(messagesChannel);
+        supabase.removeChannel(sessionChannel);
       };
     }
-  }, [session]);
+  }, [session, toast]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -110,6 +148,14 @@ export const Chatbot = () => {
   const sendMessage = async () => {
     if (!input.trim() || !session || isLoading) return;
 
+    // Check if session is handled by human agent
+    if (session.status === 'escalated' && session.assigned_agent_id) {
+      toast({
+        title: "Human Agent Active",
+        description: "Your message will be sent directly to the human agent",
+      });
+    }
+
     const userMessage: ChatMessage = {
       id: `msg_${Date.now()}`,
       session_id: session.id,
@@ -124,11 +170,18 @@ export const Chatbot = () => {
     setIsLoading(true);
 
     try {
-      // Save user message to database (in a real app)
-      // await supabase.from('chat_messages').insert(userMessage);
+      // Always save user message to database
+      await supabase.from('chat_messages').insert({
+        session_id: session.id,
+        sender_type: 'user',
+        content: input.trim(),
+        metadata: { user_id: user?.id || null }
+      });
 
-      // Simulate AI response (replace with actual AI integration)
-      await simulateAIResponse(userMessage);
+      // Only get AI response if not escalated to human
+      if (!(session.status === 'escalated' && session.assigned_agent_id)) {
+        await simulateAIResponse(userMessage);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -160,6 +213,12 @@ export const Chatbot = () => {
       const response = data;
       if (!response.success) {
         throw new Error(response.error || 'Failed to get AI response');
+      }
+
+      // Handle human takeover scenario
+      if (response.humanTakeover) {
+        // Don't set escalation flag or show AI response for human takeover
+        return;
       }
 
       // Set escalation flag and context info based on AI response
@@ -307,7 +366,8 @@ export const Chatbot = () => {
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      {message.metadata?.escalation_suggested && needsEscalation && (
+                      {message.metadata?.escalation_suggested && needsEscalation && 
+                       !(session?.status === 'escalated' && session?.assigned_agent_id) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -343,12 +403,24 @@ export const Chatbot = () => {
 
             {/* Input */}
             <div className="flex-shrink-0 p-4 border-t bg-background">
+              {session?.status === 'escalated' && session?.assigned_agent_id && (
+                <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200 flex items-center">
+                    <Shield className="h-4 w-4 mr-2" />
+                    You're now chatting with a human customer service agent
+                  </p>
+                </div>
+              )}
               <div className="flex space-x-2">
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Type your message..."
+                  placeholder={
+                    session?.status === 'escalated' && session?.assigned_agent_id 
+                      ? "Message the human agent..." 
+                      : "Type your message..."
+                  }
                   disabled={isLoading}
                   className="flex-1"
                 />
