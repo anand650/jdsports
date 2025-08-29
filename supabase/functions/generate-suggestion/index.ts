@@ -114,22 +114,67 @@ serve(async (req) => {
         .join('\n\n');
     }
 
-    // Generate AI suggestion using OpenAI
-    const systemPrompt = `You are an AI assistant helping customer service agents resolve customer issues. Based on the customer's message, conversation history, and relevant knowledge base information, provide a helpful, concise suggestion for how the agent should respond.
+    // Get order history for better context
+    const { data: orderHistory } = await supabase
+      .from('orders')
+      .select(`
+        id, 
+        status, 
+        total_amount, 
+        created_at,
+        order_items (
+          quantity,
+          price,
+          products (name, category)
+        )
+      `)
+      .eq('user_id', callData?.customer_profiles?.id || null)
+      .order('created_at', { ascending: false })
+      .limit(3);
 
-Keep suggestions under 50 words and focus on being helpful, professional, and specific to the customer's issue.
+    // Build order context
+    let orderContext = '';
+    if (orderHistory && orderHistory.length > 0) {
+      orderContext = orderHistory
+        .map(order => {
+          const items = order.order_items?.map(item => 
+            `${item.products?.name} (${item.quantity}x)`
+          ).join(', ') || 'No items';
+          return `Order #${order.id.slice(0, 8)}: ${order.status} - $${order.total_amount} - ${items}`;
+        })
+        .join('\n');
+    }
 
-${knowledgeContext ? `Knowledge Base Information:
+    // Enhanced system prompt for more actionable suggestions
+    const systemPrompt = `You are an expert AI assistant helping customer service agents provide exceptional support. Your role is to analyze the customer's inquiry and provide specific, actionable guidance that helps resolve their issue effectively.
+
+ANALYSIS FRAMEWORK:
+1. Identify the customer's primary concern or need
+2. Reference relevant knowledge base information
+3. Consider customer history and context
+4. Provide specific next steps for the agent
+
+RESPONSE GUIDELINES:
+- Be specific and actionable (not generic)
+- Reference specific products, policies, or procedures when relevant
+- Suggest proactive solutions or alternatives
+- Include empathy phrases when appropriate
+- Keep under 80 words but be comprehensive
+
+${knowledgeContext ? `KNOWLEDGE BASE REFERENCE:
 ${knowledgeContext}
 
-` : ''}Customer Context: ${customerContext}
+` : ''}${orderContext ? `CUSTOMER ORDER HISTORY:
+${orderContext}
 
-Recent Conversation:
+` : ''}CUSTOMER PROFILE: ${customerContext}
+
+CONVERSATION HISTORY:
 ${conversationContext}
 
-Latest Customer Message: ${customerMessage}
+CURRENT CUSTOMER MESSAGE: "${customerMessage}"
 
-Provide a brief, actionable suggestion for the agent based on the available information:`;
+Provide a specific, actionable suggestion that guides the agent to resolve this customer's issue effectively:`;
 
     console.log('Calling OpenAI API with prompt');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
