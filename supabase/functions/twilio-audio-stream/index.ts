@@ -237,16 +237,14 @@ serve(async (req) => {
     }
 
     const dgUrl =
-      "wss://api.deepgram.com/v1/listen?model=phonecall&encoding=mulaw&sample_rate=8000&punctuate=true&interim_results=true&smart_format=true&diarize=true&endpointing=300&utterance_end_ms=1000";
+      `wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&punctuate=true&interim_results=true&smart_format=true&diarize=true&endpointing=300&utterance_end_ms=1000&access_token=${DEEPGRAM_API_KEY}`;
 
     try {
-      dgSocket = new WebSocket(dgUrl, [], {
-        headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-      });
+      dgSocket = new WebSocket(dgUrl);
 
-      dgSocket.addEventListener("open", () => {
+      dgSocket.onopen = () => {
         dgOpen = true;
-        console.log("✅ Connected to Deepgram (plain WebSocket)");
+        console.log("✅ Connected to Deepgram");
 
         if (pendingFrames.length) {
           console.log(`▶️ Flushing ${pendingFrames.length} buffered frames to Deepgram`);
@@ -259,9 +257,9 @@ serve(async (req) => {
           }
           pendingFrames.length = 0;
         }
-      });
+      };
 
-      dgSocket.addEventListener("message", async (evt) => {
+      dgSocket.onmessage = async (evt) => {
         try {
           const msg = JSON.parse(evt.data as string);
           console.log("📩 Deepgram message:", JSON.stringify(msg));
@@ -331,26 +329,26 @@ serve(async (req) => {
         } catch (e) {
           console.error("❌ Error parsing Deepgram message:", e);
         }
-      });
+      };
 
-      dgSocket.addEventListener("close", () => {
+      dgSocket.onclose = () => {
         dgOpen = false;
         console.log("🔌 Deepgram WebSocket closed");
-      });
+      };
 
-      dgSocket.addEventListener("error", (e) => {
+      dgSocket.onerror = (e) => {
         console.error("❌ Deepgram WebSocket error:", e);
-      });
+      };
     } catch (e) {
       console.error("❌ Failed to connect to Deepgram:", e);
     }
   }
 
-  socket.addEventListener("open", () => {
+  socket.onopen = () => {
     console.log("🌐 Twilio Media Streams WS opened");
-  });
+  };
 
-  socket.addEventListener("message", async (event) => {
+  socket.onmessage = async (event) => {
     try {
       const msg = JSON.parse(event.data);
       console.log("📨 Twilio event:", msg.event);
@@ -419,18 +417,18 @@ serve(async (req) => {
     } catch (e) {
       console.error("❌ Error processing Twilio message:", e);
     }
-  });
+  };
 
-  socket.addEventListener("close", () => {
+  socket.onclose = () => {
     console.log("🔌 Twilio WS closed for CallSid:", callSid);
     try {
       dgSocket?.close();
     } catch {}
-  });
+  };
 
-  socket.addEventListener("error", (e) => {
+  socket.onerror = (e) => {
     console.error("❌ Twilio WS error:", e);
-  });
+  };
 
   return response;
 });
