@@ -35,7 +35,7 @@ serve(async (req) => {
       Digits
     } = webhookData;
 
-    // Find or create customer profile
+    // Find or create customer profile and gather comprehensive data
     let customerProfile = null;
     if (From) {
       const { data: existingProfile } = await supabase
@@ -45,11 +45,19 @@ serve(async (req) => {
         .single();
 
       if (!existingProfile) {
+        // Check if user exists with this phone number
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('phone_number', From as string)
+          .single();
+
         const { data: newProfile } = await supabase
           .from('customer_profiles')
           .insert({
             phone_number: From as string,
-            name: CallerName as string || null,
+            name: userData?.full_name || CallerName as string || null,
+            email: userData?.email || null,
             call_history_count: 1,
             last_interaction_at: new Date().toISOString()
           })
@@ -57,7 +65,17 @@ serve(async (req) => {
           .single();
         customerProfile = newProfile;
       } else {
-        customerProfile = existingProfile;
+        // Update call history count and last interaction
+        const { data: updatedProfile } = await supabase
+          .from('customer_profiles')
+          .update({
+            call_history_count: existingProfile.call_history_count + 1,
+            last_interaction_at: new Date().toISOString()
+          })
+          .eq('id', existingProfile.id)
+          .select()
+          .single();
+        customerProfile = updatedProfile || existingProfile;
       }
     }
 

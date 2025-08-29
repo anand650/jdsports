@@ -95,11 +95,19 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
         totalSpent = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);
       }
 
-      // Fetch call history
+      // Fetch call history with transcripts for issue detection
       const { data: callHistory } = await supabase
         .from('calls')
-        .select('*')
+        .select(`
+          *,
+          transcripts (
+            role,
+            text,
+            created_at
+          )
+        `)
         .eq('customer_number', profile.phone_number)
+        .neq('id', activeCall?.id || '') // Exclude current call if available
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -322,33 +330,41 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
               <ScrollArea className="h-full">
                 {customerData.orders.length > 0 ? (
                   <div className="space-y-2">
-                    {customerData.orders.map((order: any) => (
-                      <div key={order.id} className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm">Order #{order.id.slice(-8)}</span>
-                          <Badge variant={getStatusBadgeVariant(order.status)} className="text-xs">
-                            {order.status}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{format(new Date(order.created_at), 'MMM d, yyyy')}</span>
-                          <span className="font-medium">{formatCurrency(Number(order.total_amount))}</span>
-                        </div>
-                        {order.order_items && order.order_items.length > 0 && (
-                          <div className="text-xs">
-                            <span className="text-muted-foreground">Items: </span>
-                            <span>
-                              {order.order_items.map((item: any, idx: number) => (
-                                <span key={item.id}>
-                                  {item.product?.name || 'Unknown'}
-                                  {idx < order.order_items.length - 1 ? ', ' : ''}
-                                </span>
-                              ))}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                     {customerData.orders.map((order: any) => {
+                       const hasIssues = order.status === 'cancelled' || order.status === 'refunded' || order.status === 'disputed';
+                       return (
+                         <div key={order.id} className="p-3 bg-muted/30 rounded-lg space-y-2">
+                           <div className="flex items-center justify-between">
+                             <span className="font-medium text-sm">Order #{order.id.slice(-8)}</span>
+                             <Badge variant={getStatusBadgeVariant(order.status)} className="text-xs">
+                               {order.status}
+                             </Badge>
+                           </div>
+                           <div className="flex items-center justify-between text-xs text-muted-foreground">
+                             <span>{format(new Date(order.created_at), 'MMM d, yyyy')}</span>
+                             <span className="font-medium">{formatCurrency(Number(order.total_amount))}</span>
+                           </div>
+                           {hasIssues && (
+                             <div className="text-xs text-red-600 font-medium">
+                               ⚠️ Previous Issue: {order.status} order
+                             </div>
+                           )}
+                           {order.order_items && order.order_items.length > 0 && (
+                             <div className="text-xs">
+                               <span className="text-muted-foreground">Items: </span>
+                               <span>
+                                 {order.order_items.map((item: any, idx: number) => (
+                                   <span key={item.id}>
+                                     {item.product?.name || 'Unknown'}
+                                     {idx < order.order_items.length - 1 ? ', ' : ''}
+                                   </span>
+                                 ))}
+                               </span>
+                             </div>
+                           )}
+                         </div>
+                       );
+                     })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
@@ -363,44 +379,60 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
               <ScrollArea className="h-full">
                 {customerData.callHistory.length > 0 ? (
                   <div className="space-y-2">
-                    {customerData.callHistory.map((call: any) => (
-                      <div key={call.id} className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">
-                            {format(new Date(call.created_at), 'MMM d, HH:mm')}
-                          </span>
-                          <Badge variant={getStatusBadgeVariant(call.call_status)} className="text-xs">
-                            {call.call_status}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Duration: {call.call_duration ? formatDuration(call.call_duration) : 'N/A'}</span>
-                          {call.satisfaction_score && (
-                            <div className="flex items-center gap-1">
-                              <Star className="h-3 w-3 text-yellow-500" />
-                              <span>{call.satisfaction_score}/5</span>
-                            </div>
-                          )}
-                        </div>
-                        {call.resolution_status && (
-                          <Badge variant="outline" className="text-xs">
-                            {call.resolution_status}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No call history</p>
-                  </div>
-                )}
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+                     {customerData.callHistory.map((call: any) => {
+                       const hasTranscripts = call.transcripts && call.transcripts.length > 0;
+                       const customerMessages = call.transcripts?.filter((t: any) => t.role === 'customer') || [];
+                       const hadIssue = call.resolution_status === 'unresolved' || call.resolution_status === 'escalated' || 
+                                       (call.satisfaction_score && call.satisfaction_score <= 2);
+                       
+                       return (
+                         <div key={call.id} className="p-3 bg-muted/30 rounded-lg space-y-2">
+                           <div className="flex items-center justify-between">
+                             <span className="text-sm font-medium">
+                               {format(new Date(call.created_at), 'MMM d, HH:mm')}
+                             </span>
+                             <Badge variant={getStatusBadgeVariant(call.call_status)} className="text-xs">
+                               {call.call_status}
+                             </Badge>
+                           </div>
+                           <div className="flex items-center justify-between text-xs text-muted-foreground">
+                             <span>Duration: {call.call_duration ? formatDuration(call.call_duration) : 'N/A'}</span>
+                             {call.satisfaction_score && (
+                               <div className="flex items-center gap-1">
+                                 <Star className="h-3 w-3 text-yellow-500" />
+                                 <span>{call.satisfaction_score}/5</span>
+                               </div>
+                             )}
+                           </div>
+                           {hadIssue && (
+                             <div className="text-xs text-red-600 font-medium">
+                               ⚠️ Previous Issue: {call.resolution_status || 'Low satisfaction'}
+                             </div>
+                           )}
+                           {hasTranscripts && customerMessages.length > 0 && (
+                             <div className="text-xs">
+                               <span className="text-muted-foreground">Customer mentioned: </span>
+                               <div className="bg-accent/30 p-1 rounded text-xs mt-1 max-h-8 overflow-hidden">
+                                 {customerMessages[0].text.slice(0, 80)}
+                                 {customerMessages[0].text.length > 80 && '...'}
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                        );
+                      })}
+                   </div>
+                 ) : (
+                   <div className="text-center py-8 text-muted-foreground">
+                     <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                     <p className="text-sm">No call history</p>
+                   </div>
+                 )}
+               </ScrollArea>
+             </TabsContent>
+           </Tabs>
+         )}
+       </CardContent>
+     </Card>
+   );
+ };

@@ -93,7 +93,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: `Connected to ${callToAnswer.customer_number}`,
       });
 
-      // Load customer profile if available
+      // Load comprehensive customer profile data
       const { data: profile } = await supabase
         .from('customer_profiles')
         .select('*')
@@ -102,6 +102,31 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       
       if (profile) {
         setCustomerProfile(profile);
+      } else {
+        // Try to find user by phone number and create profile
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('phone_number', callToAnswer.customer_number)
+          .single();
+        
+        if (userData) {
+          const { data: newProfile } = await supabase
+            .from('customer_profiles')
+            .insert({
+              phone_number: callToAnswer.customer_number,
+              name: userData.full_name,
+              email: userData.email,
+              call_history_count: 1,
+              last_interaction_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (newProfile) {
+            setCustomerProfile(newProfile);
+          }
+        }
       }
 
       // Start real transcription for this call
