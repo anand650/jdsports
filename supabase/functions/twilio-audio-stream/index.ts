@@ -152,6 +152,27 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
             console.error('Error calling speech-to-text:', transcriptionError);
           } else if (transcriptionResult?.text && transcriptionResult.text.trim().length > 0) {
             const role = track === 'inbound' ? 'customer' : 'agent';
+            const transcriptText = transcriptionResult.text.trim();
+            
+            // Check for duplicate transcripts to avoid spam
+            const { data: recentTranscripts } = await supabase
+              .from('transcripts')
+              .select('text, created_at')
+              .eq('call_id', callId)
+              .eq('role', role)
+              .order('created_at', { ascending: false })
+              .limit(3);
+            
+            // Skip if this exact text was transcribed in the last 10 seconds
+            const isDuplicate = recentTranscripts?.some(transcript => 
+              transcript.text === transcriptText && 
+              (Date.now() - new Date(transcript.created_at).getTime()) < 10000
+            );
+            
+            if (isDuplicate) {
+              console.log(`Skipping duplicate transcript: ${transcriptText}`);
+              return;
+            }
             
             // Insert transcript into database
             const { error: insertError } = await supabase
@@ -159,29 +180,48 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
               .insert({
                 call_id: callId,
                 role: role,
-                text: transcriptionResult.text.trim(),
+                text: transcriptText,
                 created_at: new Date().toISOString()
               });
             
             if (insertError) {
               console.error('Error inserting transcript:', insertError);
             } else {
-              console.log(`Inserted ${role} transcript: ${transcriptionResult.text.trim()}`);
+              console.log(`Inserted ${role} transcript: ${transcriptText}`);
               
-              // Generate AI suggestion for customer messages
-              if (role === 'customer') {
+              // Generate AI suggestion for customer messages with significant content
+              if (role === 'customer' && transcriptText.split(' ').length >= 2) {
+                console.log(`Generating AI suggestion for customer message: ${transcriptText}`);
+                
                 try {
-                  const { error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+                  const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
                     body: {
                       callId: callId,
-                      customerMessage: transcriptionResult.text.trim()
+                      customerMessage: transcriptText
                     }
                   });
                   
                   if (suggestionError) {
                     console.error('Error generating AI suggestion:', suggestionError);
+                  } else if (suggestionData?.suggestion) {
+                    console.log('AI suggestion generated successfully:', suggestionData.suggestion);
+                    
+                    // Insert the suggestion into the database
+                    const { error: insertSuggestionError } = await supabase
+                      .from('suggestions')
+                      .insert({
+                        call_id: callId,
+                        text: suggestionData.suggestion,
+                        created_at: new Date().toISOString()
+                      });
+                    
+                    if (insertSuggestionError) {
+                      console.error('Error inserting suggestion:', insertSuggestionError);
+                    } else {
+                      console.log('Suggestion inserted successfully');
+                    }
                   } else {
-                    console.log('AI suggestion generated successfully');
+                    console.log('No suggestion returned from generate-suggestion function');
                   }
                 } catch (error) {
                   console.error('Error calling generate-suggestion function:', error);

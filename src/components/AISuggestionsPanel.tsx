@@ -102,36 +102,6 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
     }
   };
 
-  const testSuggestionGeneration = async () => {
-    if (!callId) return;
-    
-    try {
-      console.log('Testing suggestion generation for call:', callId);
-      
-      const { error } = await supabase.functions.invoke('generate-suggestion', {
-        body: {
-          callId: callId,
-          customerMessage: 'I need help with my recent order, it seems to have an issue'
-        }
-      });
-
-      if (error) {
-        console.error('Error generating test suggestion:', error);
-        toast({
-          title: "Error",
-          description: "Failed to generate test suggestion",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Test triggered",
-          description: "AI suggestion test initiated",
-        });
-      }
-    } catch (error) {
-      console.error('Error in test suggestion:', error);
-    }
-  };
 
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', { 
@@ -178,18 +148,8 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
                   AI is analyzing the conversation...
                 </p>
                 <p className="text-sidebar-accent-foreground text-xs mt-1">
-                  Suggestions will appear here
+                  Suggestions will appear automatically as customers speak
                 </p>
-                {callId && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={testSuggestionGeneration}
-                    className="mt-3"
-                  >
-                    Generate Test Suggestion
-                  </Button>
-                )}
               </div>
             ) : (
               <div className="space-y-3 pb-4">

@@ -140,11 +140,44 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    console.log(`Transcription result for ${track}:`, result.text);
+    const transcribedText = result.text || '';
+    
+    console.log(`Transcription result for ${track}: ${transcribedText}`);
+
+    // Filter out poor quality transcriptions
+    const isValidTranscript = (text: string): boolean => {
+      const trimmedText = text.trim().toLowerCase();
+      
+      // Filter out very short transcripts (likely noise)
+      if (trimmedText.length < 3) return false;
+      
+      // Filter out common false positives from background noise
+      const falsePositives = [
+        'thank you', 'thanks', 'you', 'yeah', 'yes', 'no', 'ok', 'okay',
+        'um', 'uh', 'ah', 'oh', 'hmm', 'mm'
+      ];
+      
+      // If it's only a false positive word, filter it out
+      if (falsePositives.includes(trimmedText)) return false;
+      
+      // If it contains only repetitive characters
+      if (/^(.)\1{2,}$/.test(trimmedText.replace(/\s/g, ''))) return false;
+      
+      return true;
+    };
+
+    // Only return valid transcripts
+    const filteredText = isValidTranscript(transcribedText) ? transcribedText : '';
+    
+    if (filteredText) {
+      console.log(`Valid transcription for ${track}: ${filteredText}`);
+    } else {
+      console.log(`Filtered out low-quality transcription for ${track}: ${transcribedText}`);
+    }
 
     return new Response(
       JSON.stringify({ 
-        text: result.text || '',
+        text: filteredText,
         track: track 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
