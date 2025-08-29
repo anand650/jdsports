@@ -71,7 +71,7 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
         .from('users')
         .select('*')
         .eq('phone_number', profile.phone_number)
-        .single();
+        .maybeSingle();
 
       let orders = [];
       let totalSpent = 0;

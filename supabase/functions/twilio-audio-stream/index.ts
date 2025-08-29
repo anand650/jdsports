@@ -154,33 +154,39 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
             const role = track === 'inbound' ? 'customer' : 'agent';
             const transcriptText = transcriptionResult.text.trim();
             
-            // Enhanced duplicate and quality check
-            const { data: recentTranscripts } = await supabase
+            // Enhanced duplicate and quality check with better filtering
+            const { data: recentTranscripts, error: fetchError } = await supabase
               .from('transcripts')
               .select('text, created_at')
               .eq('call_id', callId)
               .eq('role', role)
               .order('created_at', { ascending: false })
-              .limit(10);
+              .limit(20);
             
-            // Skip if this exact text was transcribed in the last 30 seconds
+            if (fetchError) {
+              console.error('Error fetching recent transcripts:', fetchError);
+              // Continue processing even if we can't check for duplicates
+            }
+            
+            // Skip if this exact text was transcribed in the last 60 seconds
             const isDuplicate = recentTranscripts?.some(transcript => 
-              transcript.text === transcriptText && 
-              (Date.now() - new Date(transcript.created_at).getTime()) < 30000
+              transcript.text.toLowerCase().trim() === transcriptText.toLowerCase().trim() && 
+              (Date.now() - new Date(transcript.created_at).getTime()) < 60000
             );
             
-            // Skip if very similar text (>80% similarity) was transcribed recently
+            // Skip if very similar text (>85% similarity) was transcribed recently
             const isSimilar = recentTranscripts?.some(transcript => {
-              const similarity = getSimilarity(transcript.text, transcriptText);
+              const similarity = getSimilarity(transcript.text.toLowerCase(), transcriptText.toLowerCase());
               const timeDiff = Date.now() - new Date(transcript.created_at).getTime();
-              return similarity > 0.8 && timeDiff < 15000;
+              return similarity > 0.85 && timeDiff < 30000;
             });
             
-            // Skip incomplete fragments or low-quality transcripts
-            const isLowQuality = transcriptText.length < 5 || 
-                                 transcriptText.split(' ').length < 2 ||
-                                 /^(uh|um|ah|er|hmm|well|so|like|you know)\s*$/i.test(transcriptText) ||
-                                 /^(thank you|thanks|ok|okay|yes|no|yeah|yep)\s*$/i.test(transcriptText);
+            // Enhanced low-quality detection
+            const isLowQuality = transcriptText.length < 3 || 
+                                 transcriptText.split(' ').length < 1 ||
+                                 /^(uh|um|ah|er|hmm|well|so|like|you know|thank you|thanks|ok|okay|yes|no|yeah|yep|bye|hello|hi)\s*[.!?]*\s*$/i.test(transcriptText) ||
+                                 /^[.!?]+\s*$/.test(transcriptText) ||
+                                 transcriptText.split(' ').every(word => word.length <= 2);
             
             if (isDuplicate || isSimilar || isLowQuality) {
               console.log(`Skipping ${isDuplicate ? 'duplicate' : isSimilar ? 'similar' : 'low-quality'} transcript: ${transcriptText}`);
@@ -203,41 +209,57 @@ async function processAudioMessage(message: any, callId: string, supabase: any) 
               console.log(`Inserted ${role} transcript: ${transcriptText}`);
               
               // Generate AI suggestion for customer messages with significant content
-              if (role === 'customer' && transcriptText.split(' ').length >= 2) {
+              if (role === 'customer' && transcriptText.split(' ').length >= 3 && 
+                  !isLowQuality && transcriptText.length > 10) {
                 console.log(`Generating AI suggestion for customer message: ${transcriptText}`);
                 
-                try {
-                  const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
-                    body: {
-                      callId: callId,
-                      customerMessage: transcriptText
-                    }
-                  });
-                  
-                  if (suggestionError) {
-                    console.error('Error generating AI suggestion:', suggestionError);
-                  } else if (suggestionData?.suggestion) {
-                    console.log('AI suggestion generated successfully:', suggestionData.suggestion);
+                // Don't generate suggestions too frequently (max 1 per 10 seconds)
+                const { data: recentSuggestions } = await supabase
+                  .from('suggestions')
+                  .select('created_at')
+                  .eq('call_id', callId)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                
+                const canGenerateSuggestion = !recentSuggestions?.length || 
+                  (Date.now() - new Date(recentSuggestions[0].created_at).getTime()) > 10000;
+                
+                if (canGenerateSuggestion) {
+                  try {
+                    const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+                      body: {
+                        callId: callId,
+                        customerMessage: transcriptText
+                      }
+                    });
                     
-                    // Insert the suggestion into the database
-                    const { error: insertSuggestionError } = await supabase
-                      .from('suggestions')
-                      .insert({
-                        call_id: callId,
-                        text: suggestionData.suggestion,
-                        created_at: new Date().toISOString()
-                      });
-                    
-                    if (insertSuggestionError) {
-                      console.error('Error inserting suggestion:', insertSuggestionError);
+                    if (suggestionError) {
+                      console.error('Error generating AI suggestion:', suggestionError);
+                    } else if (suggestionData?.suggestion && suggestionData.suggestion.length > 10) {
+                      console.log('AI suggestion generated successfully:', suggestionData.suggestion);
+                      
+                      // Insert the suggestion into the database
+                      const { error: insertSuggestionError } = await supabase
+                        .from('suggestions')
+                        .insert({
+                          call_id: callId,
+                          text: suggestionData.suggestion,
+                          created_at: new Date().toISOString()
+                        });
+                      
+                      if (insertSuggestionError) {
+                        console.error('Error inserting suggestion:', insertSuggestionError);
+                      } else {
+                        console.log('Suggestion inserted successfully');
+                      }
                     } else {
-                      console.log('Suggestion inserted successfully');
+                      console.log('No valid suggestion returned from generate-suggestion function');
                     }
-                  } else {
-                    console.log('No suggestion returned from generate-suggestion function');
+                  } catch (error) {
+                    console.error('Error calling generate-suggestion function:', error);
                   }
-                } catch (error) {
-                  console.error('Error calling generate-suggestion function:', error);
+                } else {
+                  console.log('Skipping AI suggestion - too recent');
                 }
               }
             }
