@@ -261,17 +261,30 @@ export const Chatbot = () => {
   };
 
   const requestHumanAgent = async () => {
-    if (!session) return;
+    if (!session) {
+      console.error('❌ No session available for escalation');
+      return;
+    }
 
+    console.log('🚀 Escalating chat session:', session.id);
+    
     try {
       // Update session to escalated status
-      await supabase
+      const { data, error } = await supabase
         .from('chat_sessions')
         .update({ 
           status: 'escalated',
           escalated_at: new Date().toISOString()
         })
-        .eq('id', session.id);
+        .eq('id', session.id)
+        .select();
+
+      if (error) {
+        console.error('❌ Database error during escalation:', error);
+        throw error;
+      }
+
+      console.log('✅ Session escalated successfully:', data);
 
       const escalationMessage: ChatMessage = {
         id: `escalation_${Date.now()}`,
@@ -290,7 +303,7 @@ export const Chatbot = () => {
         description: "A human agent will assist you shortly",
       });
     } catch (error) {
-      console.error('Error escalating chat:', error);
+      console.error('❌ Error escalating chat:', error);
       toast({
         title: "Error",
         description: "Failed to escalate chat",
