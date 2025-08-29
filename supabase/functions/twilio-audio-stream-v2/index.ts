@@ -68,8 +68,7 @@ Deno.serve(async (req) => {
   // Environment variables
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  // const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY");
-const ASSEMBLYAI_API_KEY = ced0df76d7fa4ecbabe510040d07a69e;
+  const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY");
   console.log("🔧 Environment check:");
   console.log("- SUPABASE_URL:", !!SUPABASE_URL);
   console.log("- SUPABASE_SERVICE_ROLE_KEY:", !!SUPABASE_SERVICE_ROLE_KEY);
@@ -95,15 +94,28 @@ const ASSEMBLYAI_API_KEY = ced0df76d7fa4ecbabe510040d07a69e;
   // Initialize AssemblyAI WebSocket connection
   async function initializeAssemblyAI() {
     try {
+      console.log("🔌 Getting AssemblyAI realtime token...");
+      
+      // Get a realtime token first
+      const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
+        method: "POST",
+        headers: {
+          authorization: ASSEMBLYAI_API_KEY,
+          "content-type": "application/json",
+        },
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+      }
+
+      const tokenData = await tokenResponse.json();
+      console.log("✅ AssemblyAI token received, expires at:", tokenData.expires_at);
+
       console.log("🔌 Connecting to AssemblyAI WebSocket...");
       
       assemblySocket = new WebSocket(
-        "wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000",
-        {
-          headers: {
-            Authorization: ASSEMBLYAI_API_KEY
-          }
-        }
+        `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000&token=${tokenData.token}`
       );
 
       // Wait for connection
