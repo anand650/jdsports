@@ -1,73 +1,108 @@
-# Welcome to your Lovable project
+# JD Sports AI Assistant
 
-## Project info
+A comprehensive AI-powered call center and e-commerce platform built for JD Sports, featuring voice interactions, real-time call management, and integrated product catalog.
 
-**URL**: https://lovable.dev/projects/8874c889-19a3-4f71-bdb2-047a42d68f69
+## Features
 
-## How can I edit this code?
+- **AI Voice Assistant**: Powered by VAPI for intelligent voice interactions
+- **Call Center Management**: Real-time call handling with Twilio integration
+- **E-commerce Integration**: Product catalog, cart functionality, and order management
+- **Agent Dashboard**: Unified interface for call center agents
+- **Customer Portal**: E-commerce layout for customer interactions
+- **Real-time Analytics**: Live call monitoring and performance metrics
+- **Knowledge Base**: AI-powered suggestions and customer support
 
-There are several ways of editing your application.
+## Technology Stack
 
-**Use Lovable**
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI Components**: shadcn/ui + Tailwind CSS
+- **Backend**: Supabase (Database, Auth, Edge Functions)
+- **Voice Integration**: Twilio Voice SDK + VAPI
+- **State Management**: TanStack Query + React Context
+- **Routing**: React Router DOM
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/8874c889-19a3-4f71-bdb2-047a42d68f69) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ and npm
+- Supabase account and project
+- Twilio account (for voice features)
+- VAPI account (for AI voice assistant)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd vapi-aid
+```
 
-Follow these steps:
+2. Install dependencies:
+```bash
+npm install
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. Set up environment variables:
+Create a `.env` file in the root directory with your configuration:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_TWILIO_ACCOUNT_SID=your_twilio_account_sid
+VITE_TWILIO_AUTH_TOKEN=your_twilio_auth_token
+VITE_VAPI_API_KEY=your_vapi_api_key
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+4. Start the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+```
+src/
+├── components/          # React components
+│   ├── ui/             # shadcn/ui components
+│   ├── AgentDashboard.tsx
+│   ├── EcommerceLayout.tsx
+│   └── ...
+├── contexts/           # React contexts
+├── hooks/              # Custom React hooks
+├── integrations/       # External service integrations
+├── pages/              # Page components
+├── types/              # TypeScript type definitions
+└── utils/              # Utility functions
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Available Scripts
 
-## What technologies are used for this project?
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run build:dev` - Build for development
+- `npm run lint` - Run ESLint
+- `npm run preview` - Preview production build
 
-This project is built with:
+## Deployment
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The application can be deployed to any static hosting service that supports Vite builds:
 
-## How can I deploy this project?
+1. Build the application:
+```bash
+npm run build
+```
 
-Simply open [Lovable](https://lovable.dev/projects/8874c889-19a3-4f71-bdb2-047a42d68f69) and click on Share -> Publish.
+2. Deploy the `dist` folder to your hosting service
 
-## Can I connect a custom domain to my Lovable project?
+## Contributing
 
-Yes, you can!
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## License
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+This project is proprietary to JD Sports.
