@@ -256,6 +256,7 @@ serve(async (req) => {
           for (const frame of pendingFrames) {
             try {
               dgSocket?.send(frame.buffer);
+              console.log("➡️ Sent buffered frame to Deepgram");
             } catch (e) {
               console.error("❌ Error sending buffered frame to Deepgram:", e);
             }
@@ -336,9 +337,9 @@ serve(async (req) => {
         }
       });
 
-      dgSocket.addEventListener("close", () => {
+      dgSocket.addEventListener("close", (evt) => {
         dgOpen = false;
-        console.log("🔌 Deepgram WebSocket closed");
+        console.log(`🔌 Deepgram WebSocket closed | code=${evt.code} reason=${evt.reason}`);
       });
 
       dgSocket.addEventListener("error", (e) => {
@@ -424,8 +425,8 @@ serve(async (req) => {
     }
   });
 
-  socket.addEventListener("close", () => {
-    console.log("🔌 Twilio WS closed for CallSid:", callSid);
+  socket.addEventListener("close", (evt) => {
+    console.log(`🔌 Twilio WS closed for CallSid=${callSid} | code=${evt.code} reason=${evt.reason}`);
     try {
       dgSocket?.close();
     } catch {}
