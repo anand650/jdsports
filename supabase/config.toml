@@ -76,3 +76,6 @@ verify_jwt = false
 
 [functions.vapi-order-lookup]
 verify_jwt = false
+
+[functions.speech-to-text]
+verify_jwt = false

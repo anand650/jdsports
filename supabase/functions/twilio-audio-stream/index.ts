@@ -84,87 +84,120 @@ serve(async (req) => {
   return response;
 });
 
-let messageCounter = 0;
-let lastTranscriptTime = 0;
+let audioBuffer: { [key: string]: Uint8Array[] } = {};
+let lastTranscriptTime: { [key: string]: number } = {};
 
 async function processAudioMessage(message: any, callId: string, supabase: any) {
   try {
-    messageCounter++;
-    console.log(`Received audio chunk for call ${callId}, sequence: ${message.sequenceNumber}`);
+    console.log(`Received audio chunk for call ${callId}, sequence: ${message.sequenceNumber}, track: ${message.media.track}`);
+    
+    const track = message.media.track;
+    const audioData = message.media.payload;
+    
+    // Initialize buffers for this call if not exists
+    const bufferKey = `${callId}-${track}`;
+    if (!audioBuffer[bufferKey]) {
+      audioBuffer[bufferKey] = [];
+      lastTranscriptTime[bufferKey] = Date.now();
+    }
+    
+    // Decode and store audio chunk
+    if (audioData) {
+      const binaryAudio = atob(audioData);
+      const chunk = new Uint8Array(binaryAudio.length);
+      for (let i = 0; i < binaryAudio.length; i++) {
+        chunk[i] = binaryAudio.charCodeAt(i);
+      }
+      audioBuffer[bufferKey].push(chunk);
+    }
     
     const currentTime = Date.now();
     
-    // Generate realistic transcripts every 3-5 seconds to simulate speech recognition
-    if (currentTime - lastTranscriptTime > 3000 && messageCounter % 150 === 0) { // Roughly every 3 seconds
+    // Process accumulated audio every 3 seconds
+    if (currentTime - lastTranscriptTime[bufferKey] > 3000 && audioBuffer[bufferKey].length > 0) {
+      console.log(`Processing accumulated audio for ${track}, ${audioBuffer[bufferKey].length} chunks`);
       
-      // Realistic conversation snippets
-      const customerMessages = [
-        "Hello, I need help with my order",
-        "I placed an order last week but haven't received it yet",
-        "My order number is 12345",
-        "Can you check the status of my shipment?",
-        "I'm concerned about the delivery delay",
-        "Is there a tracking number available?",
-        "I need to update my delivery address",
-        "When can I expect to receive my order?",
-        "Thank you for your help"
-      ];
+      // Combine all audio chunks
+      const totalLength = audioBuffer[bufferKey].reduce((sum, chunk) => sum + chunk.length, 0);
       
-      const agentMessages = [
-        "Hello! I'd be happy to help you with your order",
-        "Let me look that up for you right away",
-        "I can see your order in our system",
-        "I'll check the tracking information for you",
-        "Let me update that information",
-        "I can help you with that delivery address change",
-        "Your order is currently in transit",
-        "You should receive it within 2-3 business days",
-        "Is there anything else I can help you with today?"
-      ];
-      
-      // Alternate between customer and agent (track determines speaker)
-      const isInbound = message.media.track === 'inbound';
-      const role = isInbound ? 'customer' : 'agent';
-      const messages = isInbound ? customerMessages : agentMessages;
-      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-      
-      // Insert transcript
-      const { error } = await supabase
-        .from('transcripts')
-        .insert({
-          call_id: callId,
-          role: role,
-          text: randomMessage,
-          created_at: new Date().toISOString()
-        });
-      
-      if (error) {
-        console.error('Error inserting transcript:', error);
-      } else {
-        console.log(`Generated ${role} transcript: ${randomMessage}`);
-      }
-      
-      // Generate AI suggestion for customer messages
-      if (role === 'customer') {
+      // Only process if we have enough audio data (at least 1KB)
+      if (totalLength > 1024) {
+        const combinedAudio = new Uint8Array(totalLength);
+        let offset = 0;
+        
+        for (const chunk of audioBuffer[bufferKey]) {
+          combinedAudio.set(chunk, offset);
+          offset += chunk.length;
+        }
+        
+        // Convert to base64 for transmission
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < combinedAudio.length; i += chunkSize) {
+          const chunk = combinedAudio.subarray(i, Math.min(i + chunkSize, combinedAudio.length));
+          binary += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        const base64Audio = btoa(binary);
+        
+        // Call speech-to-text function
         try {
-          const { data, error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+          const { data: transcriptionResult, error: transcriptionError } = await supabase.functions.invoke('speech-to-text', {
             body: {
-              callId: callId,
-              customerMessage: randomMessage
+              audio: base64Audio,
+              track: track
             }
           });
           
-          if (suggestionError) {
-            console.error('Error generating AI suggestion:', suggestionError);
-          } else {
-            console.log('AI suggestion generated successfully');
+          if (transcriptionError) {
+            console.error('Error calling speech-to-text:', transcriptionError);
+          } else if (transcriptionResult?.text && transcriptionResult.text.trim().length > 0) {
+            const role = track === 'inbound' ? 'customer' : 'agent';
+            
+            // Insert transcript into database
+            const { error: insertError } = await supabase
+              .from('transcripts')
+              .insert({
+                call_id: callId,
+                role: role,
+                text: transcriptionResult.text.trim(),
+                created_at: new Date().toISOString()
+              });
+            
+            if (insertError) {
+              console.error('Error inserting transcript:', insertError);
+            } else {
+              console.log(`Inserted ${role} transcript: ${transcriptionResult.text.trim()}`);
+              
+              // Generate AI suggestion for customer messages
+              if (role === 'customer') {
+                try {
+                  const { error: suggestionError } = await supabase.functions.invoke('generate-suggestion', {
+                    body: {
+                      callId: callId,
+                      customerMessage: transcriptionResult.text.trim()
+                    }
+                  });
+                  
+                  if (suggestionError) {
+                    console.error('Error generating AI suggestion:', suggestionError);
+                  } else {
+                    console.log('AI suggestion generated successfully');
+                  }
+                } catch (error) {
+                  console.error('Error calling generate-suggestion function:', error);
+                }
+              }
+            }
           }
         } catch (error) {
-          console.error('Error calling generate-suggestion function:', error);
+          console.error('Error processing speech-to-text:', error);
         }
+        
+        // Clear buffer after processing
+        audioBuffer[bufferKey] = [];
       }
       
-      lastTranscriptTime = currentTime;
+      lastTranscriptTime[bufferKey] = currentTime;
     }
     
   } catch (error) {
