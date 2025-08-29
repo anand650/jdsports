@@ -68,12 +68,12 @@ Deno.serve(async (req) => {
   // Environment variables
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  // const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY");
-  const ASSEMBLYAI_API_KEY="ced0df76d7fa4ecbabe510040d07a69e";
+  const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY");
   console.log("🔧 Environment check:");
   console.log("- SUPABASE_URL:", !!SUPABASE_URL);
   console.log("- SUPABASE_SERVICE_ROLE_KEY:", !!SUPABASE_SERVICE_ROLE_KEY);
   console.log("- ASSEMBLYAI_API_KEY:", !!ASSEMBLYAI_API_KEY);
+  console.log("- ASSEMBLYAI_API_KEY value:", ASSEMBLYAI_API_KEY?.substring(0, 10) + "...");
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASSEMBLYAI_API_KEY) {
     console.error("❌ Missing required environment variables");
