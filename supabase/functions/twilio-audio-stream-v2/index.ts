@@ -94,33 +94,10 @@ Deno.serve(async (req) => {
   // Initialize AssemblyAI WebSocket connection
   async function initializeAssemblyAI() {
     try {
-      console.log("🔌 Getting AssemblyAI realtime token...");
-      
-      // Get a realtime token first
-      const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${ASSEMBLYAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("🔍 Token response status:", tokenResponse.status);
-      console.log("🔍 Token response headers:", Object.fromEntries(tokenResponse.headers.entries()));
-
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.log("🔍 Token response body:", errorText);
-        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText} - ${errorText}`);
-      }
-
-      const tokenData = await tokenResponse.json();
-      console.log("✅ AssemblyAI token received, expires at:", tokenData.expires_at);
-
-      console.log("🔌 Connecting to AssemblyAI WebSocket...");
+      console.log("🔌 Connecting to AssemblyAI Universal-Streaming v3...");
       
       assemblySocket = new WebSocket(
-        `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000&token=${tokenData.token}`
+        `wss://api.assemblyai.com/v3/ws?sample_rate=8000&api_key=${ASSEMBLYAI_API_KEY}`
       );
 
       // Wait for connection
