@@ -169,6 +169,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   const fetchActiveSessions = async () => {
     try {
+      console.log('🔍 Fetching active sessions...');
       const { data, error } = await supabase
         .from('chat_sessions')
         .select(`
@@ -178,13 +179,21 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         .in('status', ['active', 'escalated'])
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching sessions:', error);
+        throw error;
+      }
+      
+      console.log('📊 Raw sessions data:', data);
       
       // Transform the data to match our interface
       const sessionsWithUser = data?.map(session => ({
         ...session,
         user: session.users || null
       })) || [];
+      
+      console.log('✅ Transformed sessions:', sessionsWithUser);
+      console.log('🔥 Escalated sessions:', sessionsWithUser.filter(s => s.status === 'escalated'));
       
       setActiveSessions(sessionsWithUser as ChatSession[]);
     } catch (error) {
