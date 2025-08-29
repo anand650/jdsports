@@ -1,26 +1,35 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-serve(async (req) => {
-  console.log("🚀 Starting Twilio Audio Stream function");
-  
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   if (req.headers.get("upgrade") !== "websocket") {
     return new Response("Expected websocket", { status: 400 });
   }
 
-  const { socket, response } = Deno.upgradeWebSocket(req);
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY")!;
 
-  // Environment variables
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY") ?? "";
+  console.log("🔧 Environment check:");
+  console.log("- SUPABASE_URL:", !!SUPABASE_URL);
+  console.log("- SUPABASE_SERVICE_ROLE_KEY:", !!SUPABASE_SERVICE_ROLE_KEY);
+  console.log("- ASSEMBLYAI_API_KEY:", !!ASSEMBLYAI_API_KEY);
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASSEMBLYAI_API_KEY) {
     console.error("❌ Missing required environment variables");
-    socket.close(1011, "Server configuration error");
-    return response;
+    return new Response("Server configuration error", { status: 500 });
   }
 
+  const { socket, response } = Deno.upgradeWebSocket(req);
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // State variables
@@ -30,46 +39,32 @@ serve(async (req) => {
   let aaiSocket: WebSocket | null = null;
   let isConnected = false;
 
-  // Simple AssemblyAI connection function
+  // Connect to AssemblyAI using their streaming transcriber approach
   async function connectToAssemblyAI() {
     try {
-      console.log("🔑 Getting AssemblyAI token...");
-      console.log("🔧 Environment check - ASSEMBLYAI_API_KEY exists:", !!ASSEMBLYAI_API_KEY);
+      console.log("🔑 Connecting to AssemblyAI Streaming API...");
       
-      const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
-        method: "POST",
+      // Use the streaming endpoint directly with API key (similar to their SDK approach)
+      const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&word_boost=["agent","customer","support"]&format_turns=true`;
+      console.log("🔌 Connecting to:", wsUrl);
+      
+      aaiSocket = new WebSocket(wsUrl, [], {
         headers: {
-          "Authorization": `Bearer ${ASSEMBLYAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          expires_in: 3600
-        })
+          'Authorization': ASSEMBLYAI_API_KEY
+        }
       });
 
-      console.log("📊 Token response status:", tokenResponse.status);
-      
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error("❌ Token request failed:", tokenResponse.status, errorText);
-        throw new Error(`Token request failed: ${tokenResponse.status} - ${errorText}`);
-      }
-
-      const tokenData = await tokenResponse.json();
-      const token = tokenData.token;
-      console.log("✅ AssemblyAI token received, length:", token?.length);
-
-      if (!token) {
-        throw new Error("No token in response");
-      }
-
-      // Connect to WebSocket with 8kHz sample rate (Twilio's default)
-      const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000&token=${token}`;
-      console.log("🔌 Connecting to AssemblyAI WebSocket...");
-      
-      aaiSocket = new WebSocket(wsUrl);
+      const connectionTimeout = setTimeout(() => {
+        console.error("❌ AssemblyAI connection timeout");
+        if (aaiSocket) {
+          aaiSocket.close();
+          aaiSocket = null;
+        }
+        isConnected = false;
+      }, 10000);
 
       aaiSocket.onopen = () => {
+        clearTimeout(connectionTimeout);
         isConnected = true;
         console.log("✅ AssemblyAI WebSocket connected successfully!");
       };
@@ -77,15 +72,19 @@ serve(async (req) => {
       aaiSocket.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log("📩 AssemblyAI message:", message.message_type, JSON.stringify(message));
+          console.log("📩 AssemblyAI message type:", message.message_type || 'unknown');
           
-          if (message.message_type === "FinalTranscript" && message.text?.trim()) {
-            const text = message.text.trim();
+          if (message.message_type === "SessionBegins") {
+            console.log("✅ AssemblyAI session began with ID:", message.session_id);
+          } else if (message.message_type === "PartialTranscript") {
+            console.log(`📝 Partial transcript: "${message.text}"`);
+          } else if (message.message_type === "FinalTranscript") {
+            const text = message.text?.trim();
             const confidence = message.confidence || 0;
             
             console.log(`📝 Final Transcript: "${text}" (confidence: ${confidence})`);
             
-            if (confidence >= 0.7 && callId) {
+            if (text && confidence >= 0.7 && callId) {
               const role = lastTrack === "outbound" ? "agent" : "customer";
               
               console.log(`💾 Saving transcript for ${role}, callId: ${callId}`);
@@ -139,19 +138,16 @@ serve(async (req) => {
                   } catch (error) {
                     console.error("❌ Error in suggestion generation:", error);
                   }
-                } else {
-                  console.log("ℹ️ Skipping suggestion generation for agent message");
                 }
               }
             } else {
-              console.log(`⚠️ Low confidence or missing callId - confidence: ${confidence}, callId: ${callId}`);
+              console.log(`⚠️ Skipping transcript - text: "${text}", confidence: ${confidence}, callId: ${callId}`);
             }
-          } else if (message.message_type === "PartialTranscript") {
-            console.log(`📝 Partial transcript: "${message.text}"`);
-          } else if (message.message_type === "SessionBegins") {
-            console.log("✅ AssemblyAI session began");
+          } else if (message.message_type === "SessionTerminated") {
+            console.log("⚠️ AssemblyAI session terminated:", message.message);
+            isConnected = false;
           } else {
-            console.log(`ℹ️ Other AssemblyAI message: ${message.message_type}`);
+            console.log(`ℹ️ Other AssemblyAI message: ${message.message_type}`, message);
           }
         } catch (error) {
           console.error("❌ Error processing AssemblyAI message:", error);
@@ -159,11 +155,16 @@ serve(async (req) => {
       };
 
       aaiSocket.onclose = (event) => {
+        clearTimeout(connectionTimeout);
         isConnected = false;
         console.log(`🔌 AssemblyAI WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
+        if (event.code !== 1000) {
+          console.error("❌ AssemblyAI connection closed unexpectedly");
+        }
       };
 
       aaiSocket.onerror = (error) => {
+        clearTimeout(connectionTimeout);
         console.error("❌ AssemblyAI WebSocket error:", error);
         isConnected = false;
       };
@@ -174,6 +175,57 @@ serve(async (req) => {
     }
   }
 
+  // Convert Twilio mulaw audio to PCM16 format expected by AssemblyAI
+  function convertMulawToPCM16(mulawData: Uint8Array): Uint8Array {
+    // mulaw to linear conversion table
+    const MULAW_TO_LINEAR = [
+      -32124,-31100,-30076,-29052,-28028,-27004,-25980,-24956,
+      -23932,-22908,-21884,-20860,-19836,-18812,-17788,-16764,
+      -15996,-15484,-14972,-14460,-13948,-13436,-12924,-12412,
+      -11900,-11388,-10876,-10364,-9852,-9340,-8828,-8316,
+      -7932,-7676,-7420,-7164,-6908,-6652,-6396,-6140,
+      -5884,-5628,-5372,-5116,-4860,-4604,-4348,-4092,
+      -3900,-3772,-3644,-3516,-3388,-3260,-3132,-3004,
+      -2876,-2748,-2620,-2492,-2364,-2236,-2108,-1980,
+      -1884,-1820,-1756,-1692,-1628,-1564,-1500,-1436,
+      -1372,-1308,-1244,-1180,-1116,-1052,-988,-924,
+      -876,-844,-812,-780,-748,-716,-684,-652,
+      -620,-588,-556,-524,-492,-460,-428,-396,
+      -372,-356,-340,-324,-308,-292,-276,-260,
+      -244,-228,-212,-196,-180,-164,-148,-132,
+      -120,-112,-104,-96,-88,-80,-72,-64,
+      -56,-48,-40,-32,-24,-16,-8,0,
+      32124,31100,30076,29052,28028,27004,25980,24956,
+      23932,22908,21884,20860,19836,18812,17788,16764,
+      15996,15484,14972,14460,13948,13436,12924,12412,
+      11900,11388,10876,10364,9852,9340,8828,8316,
+      7932,7676,7420,7164,6908,6652,6396,6140,
+      5884,5628,5372,5116,4860,4604,4348,4092,
+      3900,3772,3644,3516,3388,3260,3132,3004,
+      2876,2748,2620,2492,2364,2236,2108,1980,
+      1884,1820,1756,1692,1628,1564,1500,1436,
+      1372,1308,1244,1180,1116,1052,988,924,
+      876,844,812,780,748,716,684,652,
+      620,588,556,524,492,460,428,396,
+      372,356,340,324,308,292,276,260,
+      244,228,212,196,180,164,148,132,
+      120,112,104,96,88,80,72,64,
+      56,48,40,32,24,16,8,0
+    ];
+
+    // Convert mulaw to 16-bit PCM and upsample from 8kHz to 16kHz
+    const pcm16Array = new Int16Array(mulawData.length * 2); // Double for upsampling
+    
+    for (let i = 0; i < mulawData.length; i++) {
+      const linearValue = MULAW_TO_LINEAR[mulawData[i]];
+      // Upsample: duplicate each sample
+      pcm16Array[i * 2] = linearValue;
+      pcm16Array[i * 2 + 1] = linearValue;
+    }
+    
+    return new Uint8Array(pcm16Array.buffer);
+  }
+
   // Twilio WebSocket event handlers
   socket.onopen = () => {
     console.log("🌐 Twilio WebSocket connected");
@@ -182,7 +234,7 @@ serve(async (req) => {
   socket.onmessage = async (event) => {
     try {
       const message = JSON.parse(event.data);
-      console.log("📨 Twilio event:", message.event, JSON.stringify(message, null, 2));
+      console.log("📨 Twilio event:", message.event);
 
       if (message.event === "connected") {
         console.log("🔗 Twilio connected");
@@ -222,33 +274,50 @@ serve(async (req) => {
         
         if (track) {
           lastTrack = track;
-          console.log(`🎙️ Audio track: ${track}`);
+          console.log("🎙️ Audio track:", track);
         }
 
-        if (audioData) {
-          console.log(`📦 Audio data received (${audioData.length} chars), AssemblyAI connected: ${isConnected}`);
+        if (audioData && isConnected && aaiSocket?.readyState === WebSocket.OPEN) {
+          console.log("📦 Processing audio data, length:", audioData.length);
           
-          if (isConnected && aaiSocket?.readyState === WebSocket.OPEN) {
-            try {
-              aaiSocket.send(JSON.stringify({ audio_data: audioData }));
-              console.log("➡️ Sent audio to AssemblyAI");
-            } catch (error) {
-              console.error("❌ Error sending audio to AssemblyAI:", error);
+          try {
+            // Decode base64 mulaw audio data from Twilio
+            const binaryString = atob(audioData);
+            const mulawData = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              mulawData[i] = binaryString.charCodeAt(i);
             }
-          } else {
-            console.log("⏳ AssemblyAI not ready - isConnected:", isConnected, "socket state:", aaiSocket?.readyState);
+            
+            // Convert mulaw to PCM16 and upsample to 16kHz
+            const pcm16Data = convertMulawToPCM16(mulawData);
+            
+            // Send PCM16 data directly to AssemblyAI
+            aaiSocket.send(pcm16Data);
+            console.log("📤 Sent PCM16 audio to AssemblyAI, size:", pcm16Data.length);
+          } catch (error) {
+            console.error("❌ Error processing audio for AssemblyAI:", error);
+          }
+        } else {
+          if (!isConnected) {
+            console.log("⏳ AssemblyAI not ready - isConnected: false");
+          }
+          if (!aaiSocket || aaiSocket.readyState !== WebSocket.OPEN) {
+            console.log("⏳ AssemblyAI WebSocket not open, state:", aaiSocket?.readyState);
           }
         }
       }
       
       else if (message.event === "stop") {
-        console.log("⏹️ Call ended");
-        if (aaiSocket?.readyState === WebSocket.OPEN) {
-          aaiSocket.send(JSON.stringify({ terminate_session: true }));
+        console.log("🛑 Call ended");
+        
+        // Close AssemblyAI connection gracefully
+        if (aaiSocket) {
+          console.log("🔌 Closing AssemblyAI connection...");
+          aaiSocket.close(1000, "Call ended");
+          aaiSocket = null;
+          isConnected = false;
         }
-        aaiSocket?.close();
       }
-
     } catch (error) {
       console.error("❌ Error processing Twilio message:", error);
     }
@@ -256,7 +325,13 @@ serve(async (req) => {
 
   socket.onclose = () => {
     console.log("🔌 Twilio WebSocket closed");
-    aaiSocket?.close();
+    
+    // Clean up AssemblyAI connection
+    if (aaiSocket) {
+      aaiSocket.close();
+      aaiSocket = null;
+      isConnected = false;
+    }
   };
 
   socket.onerror = (error) => {
