@@ -68,12 +68,11 @@ Deno.serve(async (req) => {
   // Environment variables
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY");
+  const ASSEMBLYAI_API_KEY = "ced0df76d7fa4ecbabe510040d07a69e";
   console.log("🔧 Environment check:");
   console.log("- SUPABASE_URL:", !!SUPABASE_URL);
   console.log("- SUPABASE_SERVICE_ROLE_KEY:", !!SUPABASE_SERVICE_ROLE_KEY);
   console.log("- ASSEMBLYAI_API_KEY:", !!ASSEMBLYAI_API_KEY);
-  console.log("- ASSEMBLYAI_API_KEY value:", ASSEMBLYAI_API_KEY?.substring(0, 10) + "...");
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASSEMBLYAI_API_KEY) {
     console.error("❌ Missing required environment variables");
@@ -101,13 +100,18 @@ Deno.serve(async (req) => {
       const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
         method: "POST",
         headers: {
-           authorization: ASSEMBLYAI_API_KEY,
-          "content-type": "application/json",
+          "Authorization": ASSEMBLYAI_API_KEY,
+          "Content-Type": "application/json",
         },
       });
 
+      console.log("🔍 Token response status:", tokenResponse.status);
+      console.log("🔍 Token response headers:", Object.fromEntries(tokenResponse.headers.entries()));
+
       if (!tokenResponse.ok) {
-        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+        const errorText = await tokenResponse.text();
+        console.log("🔍 Token response body:", errorText);
+        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText} - ${errorText}`);
       }
 
       const tokenData = await tokenResponse.json();
