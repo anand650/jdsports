@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
 import { LiveTranscriptPanel } from './LiveTranscriptPanel';
-import { AISuggestionsPanel } from './AISuggestionsPanel';
+import { SuggestionsPanel } from './SuggestionsPanel';
 import { CallHistory } from './CallHistory';
 import { CustomerInfoPanel } from './CustomerInfoPanel';
 import { EnhancedCustomerInfoPanel } from './EnhancedCustomerInfoPanel';
@@ -11,6 +11,7 @@ import { IncomingCallNotification } from './IncomingCallNotification';
 import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useRealtimeTranscripts, useRealtimeSuggestions } from '@/hooks/useRealtimeSubscriptions';
 
 interface CallCenterLayoutProps {
   showHeader?: boolean;
@@ -23,6 +24,10 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const { toast } = useToast();
+
+  // Real-time subscriptions
+  const transcripts = useRealtimeTranscripts(activeCall?.id || null);
+  const suggestions = useRealtimeSuggestions(activeCall?.id || null);
 
   // Subscribe to incoming calls and call updates
   useEffect(() => {
@@ -276,7 +281,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
                   <LiveTranscriptPanel callId={activeCall?.id || null} />
                 </div>
                 <div className="flex-1">
-                  <AISuggestionsPanel callId={activeCall?.id || null} />
+                  <SuggestionsPanel suggestions={suggestions} />
                 </div>
               </div>
               
