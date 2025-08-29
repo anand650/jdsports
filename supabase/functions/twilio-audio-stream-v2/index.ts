@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       console.log("🔌 Connecting to AssemblyAI Universal-Streaming v3...");
       
       assemblySocket = new WebSocket(
-        `wss://streaming.assemblyai.com/v3/ws?sample_rate=8000&format_turns=true`
+        `wss://streaming.assemblyai.com/v3/ws?sample_rate=8000&format_turns=true&token=${ASSEMBLYAI_API_KEY}`
       );
 
       // Wait for connection
@@ -112,13 +112,6 @@ Deno.serve(async (req) => {
           clearTimeout(timeout);
           isAssemblyConnected = true;
           console.log("✅ AssemblyAI WebSocket connected!");
-          
-          // Send authorization as first message
-          assemblySocket!.send(JSON.stringify({
-            type: "Auth",
-            token: ASSEMBLYAI_API_KEY
-          }));
-          
           resolve();
         };
 
