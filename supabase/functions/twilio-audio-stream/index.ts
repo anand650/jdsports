@@ -247,16 +247,16 @@ serve(async (req) => {
       const { socket: ws } = await dgWss.connection;
       dgSocket = ws;
 
+      // 🔹 New detailed lifecycle logs
       dgSocket.addEventListener("open", () => {
         dgOpen = true;
-        console.log("✅ Connected to Deepgram");
+        console.log("✅ Deepgram WebSocket OPENED");
 
         if (pendingFrames.length) {
           console.log(`▶️ Flushing ${pendingFrames.length} buffered frames to Deepgram`);
           for (const frame of pendingFrames) {
             try {
               dgSocket?.send(frame.buffer);
-              console.log("➡️ Sent buffered frame to Deepgram");
             } catch (e) {
               console.error("❌ Error sending buffered frame to Deepgram:", e);
             }
@@ -266,9 +266,10 @@ serve(async (req) => {
       });
 
       dgSocket.addEventListener("message", async (evt) => {
+        console.log("📩 Deepgram raw message:", evt.data); // log raw before parsing
         try {
           const msg = JSON.parse(evt.data as string);
-          console.log("📩 Deepgram message:", JSON.stringify(msg));
+          console.log("📩 Deepgram parsed message:", JSON.stringify(msg));
 
           if (msg.type === "Results") {
             const isFinal: boolean = !!msg.is_final;
@@ -339,11 +340,11 @@ serve(async (req) => {
 
       dgSocket.addEventListener("close", (evt) => {
         dgOpen = false;
-        console.log(`🔌 Deepgram WebSocket closed | code=${evt.code} reason=${evt.reason}`);
+        console.log(`🔌 Deepgram WebSocket CLOSED (code=${evt.code}, reason=${evt.reason})`);
       });
 
       dgSocket.addEventListener("error", (e) => {
-        console.error("❌ Deepgram WebSocket error:", e);
+        console.error("❌ Deepgram WebSocket ERROR:", e);
       });
     } catch (e) {
       console.error("❌ Failed to connect to Deepgram:", e);
@@ -425,8 +426,8 @@ serve(async (req) => {
     }
   });
 
-  socket.addEventListener("close", (evt) => {
-    console.log(`🔌 Twilio WS closed for CallSid=${callSid} | code=${evt.code} reason=${evt.reason}`);
+  socket.addEventListener("close", () => {
+    console.log("🔌 Twilio WS closed for CallSid:", callSid);
     try {
       dgSocket?.close();
     } catch {}
