@@ -53,13 +53,13 @@ serve(async (req) => {
   }
 
   try {
-    const { audio, track } = await req.json();
+    const { audio, track, callId, audioSize } = await req.json();
     
     if (!audio) {
       throw new Error('No audio data provided');
     }
 
-    console.log(`Processing audio for ${track} track, size: ${audio.length}`);
+    console.log(`Processing audio for ${track} track, callId: ${callId}, size: ${audio.length}, audioSize: ${audioSize}`);
 
     // Decode base64 audio to binary (μ-law encoded)
     const binaryAudio = atob(audio);
@@ -117,12 +117,14 @@ serve(async (req) => {
 
     console.log(`Created WAV file: ${wavFile.length} bytes`);
 
-    // Prepare form data for OpenAI Whisper
+    // Enhanced form data preparation with quality parameters
     const formData = new FormData();
     const blob = new Blob([wavFile], { type: 'audio/wav' });
     formData.append('file', blob, 'audio.wav');
     formData.append('model', 'whisper-1');
     formData.append('language', 'en');
+    formData.append('temperature', '0.2'); // Lower temperature for more consistent results
+    formData.append('response_format', 'verbose_json'); // Get confidence scores
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -141,22 +143,31 @@ serve(async (req) => {
 
     const result = await response.json();
     const transcribedText = result.text || '';
+    const confidence = result.segments ? result.segments.reduce((avg: number, seg: any) => avg + (seg.avg_logprob || 0), 0) / result.segments.length : 0;
     
-    console.log(`Transcription result for ${track}: ${transcribedText}`);
+    console.log(`Transcription result for ${track} (confidence: ${confidence}): ${transcribedText}`);
 
-    // Enhanced transcript validation
-    const isValidTranscript = (text: string): boolean => {
+    // Enhanced transcript validation with confidence scoring
+    const isValidTranscript = (text: string, confidenceScore: number): boolean => {
       const trimmedText = text.trim().toLowerCase();
       
       // Filter out very short transcripts (likely noise)
       if (trimmedText.length < 3) return false;
       
-      // Filter out common false positives and system sounds
+      // Filter out low confidence transcriptions (threshold: -1.0)
+      if (confidenceScore < -1.0) {
+        console.log(`Low confidence transcription filtered: ${trimmedText} (confidence: ${confidenceScore})`);
+        return false;
+      }
+      
+      // Enhanced false positive detection with common phrases and system sounds
       const falsePositives = [
         'thank you', 'thanks', 'you', 'yeah', 'yes', 'no', 'ok', 'okay',
         'um', 'uh', 'ah', 'oh', 'hmm', 'mm', 'hello', 'hi', 'bye', 'goodbye',
         'the', 'and', 'but', 'or', 'so', 'well', 'now', 'then', 'here', 'there',
-        'music', 'sound', 'noise', 'beep', 'ring', 'tone', 'click', 'buzz'
+        'music', 'sound', 'noise', 'beep', 'ring', 'tone', 'click', 'buzz',
+        'please hold', 'hold please', 'one moment', 'please wait', 'connecting',
+        'transferred', 'transfer', 'hold on', 'just a moment', 'standby'
       ];
       
       // If it's only a false positive word, filter it out
@@ -165,13 +176,16 @@ serve(async (req) => {
       // Filter out single character repeated
       if (/^(.)\1{2,}$/.test(trimmedText.replace(/\s/g, ''))) return false;
       
-      // Filter out common transcription errors (like system sounds)
+      // Enhanced system sound detection with more patterns
       const systemSounds = [
         /^[a-z]\s*[a-z]\s*[a-z]$/,  // Single letters (a b c)
         /^(la|na|da|ta|ka|pa|ba|ma|ra|sa|ha|wa|ya|ga|fa|va|za|ja|ca|xa){3,}$/,  // Repetitive syllables
         /^\d+$/,  // Only numbers
         /^[^\w\s]+$/,  // Only punctuation/symbols
-        /^(music|instrumental|singing|humming|whistling|breathing|coughing|sniffing)$/i  // Audio descriptions
+        /^(music|instrumental|singing|humming|whistling|breathing|coughing|sniffing|dial tone|busy signal|ringing)$/i,  // Audio descriptions
+        /^(test|testing|check|checking|one two three|1 2 3)$/i,  // Test phrases
+        /^(.)\1{4,}$/,  // Repeated characters (aaaaa, bbbbb)
+        /^(beep|boop|ring|ding|ping|buzz|click|static|noise|silence)$/i  // System sounds
       ];
       
       if (systemSounds.some(pattern => pattern.test(trimmedText))) return false;
@@ -183,8 +197,8 @@ serve(async (req) => {
       return hasValidWord;
     };
 
-    // Only return valid transcripts
-    const filteredText = isValidTranscript(transcribedText) ? transcribedText : '';
+    // Only return valid transcripts with confidence check
+    const filteredText = isValidTranscript(transcribedText, confidence) ? transcribedText : '';
     
     if (filteredText) {
       console.log(`Valid transcription for ${track}: ${filteredText}`);
@@ -195,7 +209,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         text: filteredText,
-        track: track 
+        track: track,
+        confidence: confidence,
+        callId: callId,
+        processed: true
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
