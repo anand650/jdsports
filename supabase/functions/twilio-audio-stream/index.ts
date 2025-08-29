@@ -39,9 +39,12 @@ serve(async (req) => {
       const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
         method: "POST",
         headers: {
-          "authorization": ASSEMBLYAI_API_KEY,
-          "content-type": "application/json"
-        }
+          "Authorization": `Bearer ${ASSEMBLYAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          expires_in: 3600
+        })
       });
 
       console.log("📊 Token response status:", tokenResponse.status);
