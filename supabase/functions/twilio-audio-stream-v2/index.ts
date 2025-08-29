@@ -97,11 +97,11 @@ Deno.serve(async (req) => {
       console.log("🔌 Connecting to AssemblyAI Universal-Streaming v3...");
       
       assemblySocket = new WebSocket(
-        `wss://api.assemblyai.com/v3/ws?sample_rate=8000`,
+        `wss://streaming.assemblyai.com/v3/ws?sample_rate=8000&format_turns=true`,
         [],
         {
           headers: {
-            "Authorization": `Bearer ${ASSEMBLYAI_API_KEY}`
+            "Authorization": ASSEMBLYAI_API_KEY
           }
         }
       );
@@ -129,29 +129,21 @@ Deno.serve(async (req) => {
       });
 
       // Handle incoming messages from AssemblyAI
-      const transcriptTexts: { [key: string]: string } = {};
-      
       assemblySocket.onmessage = async (event) => {
         try {
           const response = JSON.parse(event.data);
-          console.log("📥 AssemblyAI response:", response.message_type || response.type);
+          console.log("📥 AssemblyAI response:", JSON.stringify(response, null, 2));
           
-          if (response.text && response.audio_start !== undefined) {
-            transcriptTexts[response.audio_start] = response.text;
+          if (response.type === "Begin") {
+            console.log("🎬 AssemblyAI session began:", response.id);
+          } 
+          else if (response.type === "Turn") {
+            const transcript = response.transcript || "";
+            const isFormatted = response.turn_is_formatted;
             
-            // Sort and combine texts by audio_start timestamp
-            const keys = Object.keys(transcriptTexts).sort((a, b) => parseFloat(a) - parseFloat(b));
-            let fullText = '';
-            for (const key of keys) {
-              if (transcriptTexts[key]) {
-                fullText += ` ${transcriptTexts[key]}`;
-              }
-            }
+            console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
-            const cleanText = fullText.trim();
-            if (cleanText && callId) {
-              console.log("💬 Transcript:", cleanText);
-              
+            if (isFormatted && transcript.trim() && callId) {
               // Determine role based on last track
               const role = lastTrack === "outbound" ? "agent" : "customer";
               
@@ -161,7 +153,7 @@ Deno.serve(async (req) => {
                 .insert({
                   call_id: callId,
                   role,
-                  text: cleanText,
+                  text: transcript.trim(),
                   created_at: new Date().toISOString()
                 });
 
@@ -177,7 +169,7 @@ Deno.serve(async (req) => {
                   try {
                     const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke(
                       "generate-suggestion", 
-                      { body: { callId, customerMessage: cleanText } }
+                      { body: { callId, customerMessage: transcript.trim() } }
                     );
 
                     if (!suggestionError && suggestionData?.suggestion) {
@@ -197,6 +189,9 @@ Deno.serve(async (req) => {
                 }
               }
             }
+          }
+          else if (response.type === "Termination") {
+            console.log("🏁 AssemblyAI session terminated");
           }
         } catch (error) {
           console.error("❌ AssemblyAI message processing error:", error);
@@ -233,12 +228,8 @@ Deno.serve(async (req) => {
           offset += chunk.length;
         }
         
-        // Convert to base64 and send
-        const encodedAudio = bufferToBase64(combinedBuffer);
-        
-        assemblySocket.send(JSON.stringify({ 
-          audio_data: encodedAudio 
-        }));
+        // Send raw binary audio data (not JSON) as per official documentation
+        assemblySocket.send(combinedBuffer);
         
         console.log("📤 Sent audio chunk:", combinedBuffer.length, "bytes");
         audioChunks = []; // Clear chunks after sending
@@ -330,7 +321,7 @@ Deno.serve(async (req) => {
         
         // Terminate AssemblyAI session
         if (assemblySocket && isAssemblyConnected) {
-          assemblySocket.send(JSON.stringify({ terminate_session: true }));
+          assemblySocket.send(JSON.stringify({ type: "Terminate" }));
           assemblySocket.close();
           assemblySocket = null;
           isAssemblyConnected = false;
@@ -344,7 +335,7 @@ Deno.serve(async (req) => {
   socket.onclose = () => {
     console.log("🔌 Twilio WebSocket closed");
     if (assemblySocket) {
-      assemblySocket.send(JSON.stringify({ terminate_session: true }));
+      assemblySocket.send(JSON.stringify({ type: "Terminate" }));
       assemblySocket.close();
       assemblySocket = null;
       isAssemblyConnected = false;
