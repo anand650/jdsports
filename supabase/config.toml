@@ -50,6 +50,9 @@ vector_port = 54328
 [functions.chatbot-rag]
 verify_jwt = false
 
+[functions.deepgram-transcription]
+verify_jwt = false
+
 [functions.twilio-voice-webhook]
 verify_jwt = false
 
