@@ -204,7 +204,6 @@
 
 // supabase/functions/twilio-media-to-deepgram/index.ts
 // Deno Edge Function: Twilio Media Streams → Deepgram Realtime → Supabase
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
 
@@ -228,17 +227,12 @@ serve(async (req) => {
   let callId: string | null = null;
 
   // Keep the latest Twilio track we saw; helps assign role on final transcripts
-  // Twilio media.track: 'inbound' (customer) | 'outbound' (agent)
   let lastTrack: "inbound" | "outbound" | null = null;
 
-  // Deepgram socket via WebSocketStream (supports headers in Deno)
   let dgSocket: WebSocket | null = null;
   let dgOpen = false;
-
-  // Buffer Twilio audio frames until Deepgram is connected
   const pendingFrames: Uint8Array[] = [];
 
-  // Utility: base64 → Uint8Array
   const b64ToU8 = (b64: string) =>
     Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
@@ -248,24 +242,18 @@ serve(async (req) => {
       return;
     }
 
-    // Deepgram realtime endpoint with telephony settings
     const dgUrl =
       "wss://api.deepgram.com/v1/listen?model=phonecall&encoding=mulaw&sample_rate=8000&punctuate=true&interim_results=true&smart_format=true&diarize=true&endpointing=300&utterance_end_ms=1000";
 
     try {
-      // Use WHATWG WebSocketStream to pass headers in Deno
-      // @ts-ignore - lib.deno types include WebSocketStream in Deno
-      const dgWss = new WebSocketStream(dgUrl, {
-        headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-      });
-      const { socket: ws } = await dgWss.connection;
-      dgSocket = ws;
+      // Authenticate using Deepgram’s WebSocket subprotocol
+      dgSocket = new WebSocket(dgUrl, ["token", DEEPGRAM_API_KEY]);
 
-      dgSocket.addEventListener("open", () => {
+      dgSocket.onopen = () => {
         dgOpen = true;
         console.log("Connected to Deepgram");
 
-        // Flush any buffered frames
+        // Flush buffered frames
         if (pendingFrames.length) {
           for (const frame of pendingFrames) {
             try {
@@ -276,17 +264,11 @@ serve(async (req) => {
           }
           pendingFrames.length = 0;
         }
-      });
+      };
 
-      dgSocket.addEventListener("message", async (evt) => {
+      dgSocket.onmessage = async (evt) => {
         try {
           const msg = JSON.parse(evt.data as string);
-
-          if (msg.type === "Metadata") {
-            // Useful Deepgram session info
-            // console.log("DG Metadata:", msg);
-            return;
-          }
 
           if (msg.type === "Results") {
             const isFinal: boolean = !!msg.is_final;
@@ -296,15 +278,13 @@ serve(async (req) => {
 
             if (!text) return;
 
-            // Only store finalised phrases; loosen confidence so we don't drop short utterances
             if (isFinal && confidence >= 0.5) {
               const role =
                 lastTrack === "outbound"
                   ? "agent"
-                  : "customer"; // Default to customer if unknown
+                  : "customer";
 
               if (!callId) {
-                // No DB record to attach yet; skip insert
                 console.warn("Final transcript but callId not ready:", text);
                 return;
               }
@@ -321,7 +301,6 @@ serve(async (req) => {
               if (insertErr) {
                 console.error("Error inserting transcript:", insertErr);
               } else {
-                // Kick AI suggestion only for customer lines (lightweight trigger)
                 if (role === "customer") {
                   try {
                     const { data: sugData, error: sugErr } =
@@ -355,16 +334,16 @@ serve(async (req) => {
         } catch (e) {
           console.error("Error parsing Deepgram message:", e);
         }
-      });
+      };
 
-      dgSocket.addEventListener("close", () => {
+      dgSocket.onerror = (e) => {
+        console.error("Deepgram WebSocket error:", e);
+      };
+
+      dgSocket.onclose = () => {
         dgOpen = false;
         console.log("Deepgram WebSocket closed");
-      });
-
-      dgSocket.addEventListener("error", (e) => {
-        console.error("Deepgram WebSocket error:", e);
-      });
+      };
     } catch (e) {
       console.error("Failed to connect to Deepgram:", e);
     }
@@ -387,7 +366,6 @@ serve(async (req) => {
           callSid = msg?.start?.callSid ?? null;
           console.log("Twilio start for CallSid:", callSid);
 
-          // Resolve our internal call_id
           if (callSid) {
             const { data: callRec, error } = await supabase
               .from("calls")
@@ -402,13 +380,11 @@ serve(async (req) => {
             }
           }
 
-          // Connect Deepgram now
           await connectDeepgram();
           break;
         }
 
         case "media": {
-          // media = { payload: base64, track: 'inbound'|'outbound' }
           const track = msg?.media?.track as "inbound" | "outbound" | undefined;
           if (track === "inbound" || track === "outbound") {
             lastTrack = track;
@@ -419,7 +395,6 @@ serve(async (req) => {
 
           const frame = b64ToU8(b64);
 
-          // Send to Deepgram (raw μ-law 8k audio)
           if (dgOpen && dgSocket?.readyState === WebSocket.OPEN) {
             try {
               dgSocket.send(frame.buffer);
@@ -427,15 +402,10 @@ serve(async (req) => {
               console.error("Error sending frame to Deepgram:", e);
             }
           } else {
-            // Buffer until DG is ready
             pendingFrames.push(frame);
           }
           break;
         }
-
-        case "mark":
-          // Optional: handle markers if you use them
-          break;
 
         case "stop":
           console.log("Twilio stop for CallSid:", callSid);
@@ -445,8 +415,6 @@ serve(async (req) => {
           break;
 
         default:
-          // Unknown/heartbeat events
-          // console.log("Twilio event:", msg.event);
           break;
       }
     } catch (e) {
