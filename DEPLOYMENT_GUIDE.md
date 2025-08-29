@@ -174,7 +174,6 @@ sudo systemctl restart nginx
 # Install UFW (Ubuntu) or configure iptables (CentOS)
 sudo ufw allow 22/tcp    # SSH
 sudo ufw allow 9090/tcp  # HTTP (JD Sports AI)
-sudo ufw allow 443/tcp   # HTTPS
 sudo ufw enable
 ```
 

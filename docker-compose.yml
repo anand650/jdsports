@@ -8,7 +8,6 @@ services:
     container_name: jd-sports-ai-assistant
     ports:
       - "9090:80"
-      - "443:443"
     restart: unless-stopped
     environment:
       - NODE_ENV=production
