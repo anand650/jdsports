@@ -6,6 +6,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// μ-law to linear PCM conversion table
+const ULAW_TO_LINEAR = new Int16Array([
+  -32124, -31100, -30076, -29052, -28028, -27004, -25980, -24956,
+  -23932, -22908, -21884, -20860, -19836, -18812, -17788, -16764,
+  -15996, -15484, -14972, -14460, -13948, -13436, -12924, -12412,
+  -11900, -11388, -10876, -10364, -9852, -9340, -8828, -8316,
+  -7932, -7676, -7420, -7164, -6908, -6652, -6396, -6140,
+  -5884, -5628, -5372, -5116, -4860, -4604, -4348, -4092,
+  -3900, -3772, -3644, -3516, -3388, -3260, -3132, -3004,
+  -2876, -2748, -2620, -2492, -2364, -2236, -2108, -1980,
+  -1884, -1820, -1756, -1692, -1628, -1564, -1500, -1436,
+  -1372, -1308, -1244, -1180, -1116, -1052, -988, -924,
+  -876, -844, -812, -780, -748, -716, -684, -652,
+  -620, -588, -556, -524, -492, -460, -428, -396,
+  -372, -356, -340, -324, -308, -292, -276, -260,
+  -244, -228, -212, -196, -180, -164, -148, -132,
+  -120, -112, -104, -96, -88, -80, -72, -64,
+  -56, -48, -40, -32, -24, -16, -8, 0,
+  32124, 31100, 30076, 29052, 28028, 27004, 25980, 24956,
+  23932, 22908, 21884, 20860, 19836, 18812, 17788, 16764,
+  15996, 15484, 14972, 14460, 13948, 13436, 12924, 12412,
+  11900, 11388, 10876, 10364, 9852, 9340, 8828, 8316,
+  7932, 7676, 7420, 7164, 6908, 6652, 6396, 6140,
+  5884, 5628, 5372, 5116, 4860, 4604, 4348, 4092,
+  3900, 3772, 3644, 3516, 3388, 3260, 3132, 3004,
+  2876, 2748, 2620, 2492, 2364, 2236, 2108, 1980,
+  1884, 1820, 1756, 1692, 1628, 1564, 1500, 1436,
+  1372, 1308, 1244, 1180, 1116, 1052, 988, 924,
+  876, 844, 812, 780, 748, 716, 684, 652,
+  620, 588, 556, 524, 492, 460, 428, 396,
+  372, 356, 340, 324, 308, 292, 276, 260,
+  244, 228, 212, 196, 180, 164, 148, 132,
+  120, 112, 104, 96, 88, 80, 72, 64,
+  56, 48, 40, 32, 24, 16, 8, 0
+]);
+
+// Convert μ-law to linear PCM
+function ulawToLinear(ulawByte: number): number {
+  return ULAW_TO_LINEAR[ulawByte & 0xFF];
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -20,14 +61,20 @@ serve(async (req) => {
 
     console.log(`Processing audio for ${track} track, size: ${audio.length}`);
 
-    // Decode base64 audio to binary
+    // Decode base64 audio to binary (μ-law encoded)
     const binaryAudio = atob(audio);
-    const audioBytes = new Uint8Array(binaryAudio.length);
+    const ulawBytes = new Uint8Array(binaryAudio.length);
     for (let i = 0; i < binaryAudio.length; i++) {
-      audioBytes[i] = binaryAudio.charCodeAt(i);
+      ulawBytes[i] = binaryAudio.charCodeAt(i);
     }
 
-    // Create WAV header for the audio data (16-bit PCM, 8kHz)
+    // Convert μ-law to 16-bit linear PCM
+    const pcmSamples = new Int16Array(ulawBytes.length);
+    for (let i = 0; i < ulawBytes.length; i++) {
+      pcmSamples[i] = ulawToLinear(ulawBytes[i]);
+    }
+
+    // Create WAV header for 16-bit PCM, 8kHz, mono
     const createWavHeader = (audioLength: number) => {
       const header = new ArrayBuffer(44);
       const view = new DataView(header);
@@ -41,10 +88,10 @@ serve(async (req) => {
       view.setUint32(12, 0x666d7420, false); // "fmt "
       view.setUint32(16, 16, true); // Subchunk size
       view.setUint16(20, 1, true); // Audio format (PCM)
-      view.setUint16(22, 1, true); // Number of channels
-      view.setUint32(24, 8000, true); // Sample rate
-      view.setUint32(28, 16000, true); // Byte rate
-      view.setUint16(32, 2, true); // Block align
+      view.setUint16(22, 1, true); // Number of channels (mono)
+      view.setUint32(24, 8000, true); // Sample rate (8kHz)
+      view.setUint32(28, 16000, true); // Byte rate (8000 * 1 * 16 / 8)
+      view.setUint16(32, 2, true); // Block align (1 * 16 / 8)
       view.setUint16(34, 16, true); // Bits per sample
       
       // data sub-chunk
@@ -54,11 +101,21 @@ serve(async (req) => {
       return new Uint8Array(header);
     };
 
+    // Convert PCM samples to byte array (little endian)
+    const pcmBytes = new Uint8Array(pcmSamples.length * 2);
+    for (let i = 0; i < pcmSamples.length; i++) {
+      const sample = pcmSamples[i];
+      pcmBytes[i * 2] = sample & 0xFF;     // Low byte
+      pcmBytes[i * 2 + 1] = (sample >> 8) & 0xFF; // High byte
+    }
+
     // Create complete WAV file
-    const wavHeader = createWavHeader(audioBytes.length);
-    const wavFile = new Uint8Array(wavHeader.length + audioBytes.length);
+    const wavHeader = createWavHeader(pcmBytes.length);
+    const wavFile = new Uint8Array(wavHeader.length + pcmBytes.length);
     wavFile.set(wavHeader);
-    wavFile.set(audioBytes, wavHeader.length);
+    wavFile.set(pcmBytes, wavHeader.length);
+
+    console.log(`Created WAV file: ${wavFile.length} bytes`);
 
     // Prepare form data for OpenAI Whisper
     const formData = new FormData();
