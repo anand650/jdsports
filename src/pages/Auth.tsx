@@ -35,9 +35,19 @@ export const Auth = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const action = urlParams.get('action');
     
+    // Check if this is an email confirmation redirect (tokens in hash)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const hasAuthTokens = hashParams.get('access_token') && hashParams.get('type') === 'signup';
+    
     if (action === 'logout') {
       setShowLogout(true);
       setActiveTab('logout');
+    } else if (hasAuthTokens) {
+      // Show loading state during email confirmation processing
+      toast({
+        title: "Email Confirmed!",
+        description: "Setting up your account...",
+      });
     } else if (user && userProfile) {
       // Only redirect if we're not on the auth page for logout purposes
       if (userProfile.role === 'agent') {
@@ -46,7 +56,7 @@ export const Auth = () => {
         navigate('/');
       }
     }
-  }, [user, userProfile, navigate]);
+  }, [user, userProfile, navigate, toast]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
