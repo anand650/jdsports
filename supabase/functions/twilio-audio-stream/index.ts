@@ -19,10 +19,10 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const ASSEMBLYAI_API_KEY = Deno.env.get("ASSEMBLYAI_API_KEY")!;
 
-  console.log("🔧 Environment check:");
+  console.log("🔧 Starting audio stream function");
   console.log("- SUPABASE_URL:", !!SUPABASE_URL);
   console.log("- SUPABASE_SERVICE_ROLE_KEY:", !!SUPABASE_SERVICE_ROLE_KEY);
-  console.log("- ASSEMBLYAI_API_KEY:", !!ASSEMBLYAI_API_KEY, "length:", ASSEMBLYAI_API_KEY?.length);
+  console.log("- ASSEMBLYAI_API_KEY:", !!ASSEMBLYAI_API_KEY);
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ASSEMBLYAI_API_KEY) {
     console.error("❌ Missing required environment variables");
@@ -39,11 +39,12 @@ Deno.serve(async (req) => {
   let aaiSocket: WebSocket | null = null;
   let isConnected = false;
 
-  // Get AssemblyAI token and connect
+  // Connect to AssemblyAI Real-time API
   async function connectToAssemblyAI() {
     try {
-      console.log("🔑 Getting AssemblyAI temporary token...");
+      console.log("🚀 Connecting to AssemblyAI Real-time API...");
       
+      // First get a temporary token
       const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
         method: "POST",
         headers: {
@@ -51,135 +52,133 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          expires_in: 3600
+          expires_in: 3600,
+          word_boost: ["agent", "customer", "support", "help"],
+          format_turns: true
         })
       });
 
-      console.log("📊 Token response status:", tokenResponse.status);
-      
       if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
         console.error("❌ Token request failed:", tokenResponse.status, errorText);
-        throw new Error(`Token request failed: ${tokenResponse.status} - ${errorText}`);
+        throw new Error(`Token failed: ${tokenResponse.status}`);
       }
 
       const tokenData = await tokenResponse.json();
-      const token = tokenData.token;
-      console.log("✅ Token received, length:", token?.length);
+      console.log("✅ Got AssemblyAI token");
 
-      if (!token) {
-        throw new Error("No token received from AssemblyAI");
-      }
-
-      // Connect to WebSocket - Twilio sends 8kHz mulaw, we'll convert to match
-      const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000&token=${token}`;
-      console.log("🔌 Connecting to AssemblyAI WebSocket...");
+      // Connect to WebSocket with correct URL and parameters
+      const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000&token=${tokenData.token}`;
+      console.log("🔌 Connecting to WebSocket...");
       
       aaiSocket = new WebSocket(wsUrl);
 
-      return new Promise<void>((resolve, reject) => {
+      // Set up connection promise with timeout
+      await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          console.error("❌ AssemblyAI connection timeout after 10s");
+          console.error("❌ Connection timeout");
           reject(new Error("Connection timeout"));
-        }, 10000);
+        }, 15000);
 
         aaiSocket!.onopen = () => {
           clearTimeout(timeout);
           isConnected = true;
-          console.log("✅ AssemblyAI WebSocket connected!");
+          console.log("✅ AssemblyAI connected!");
           resolve();
         };
 
         aaiSocket!.onerror = (error) => {
           clearTimeout(timeout);
-          console.error("❌ AssemblyAI WebSocket error:", error);
+          console.error("❌ WebSocket error:", error);
           reject(error);
         };
+      });
 
-        aaiSocket!.onclose = (event) => {
-          clearTimeout(timeout);
-          isConnected = false;
-          console.log(`🔌 AssemblyAI closed (code: ${event.code}, reason: ${event.reason})`);
-        };
-
-        aaiSocket!.onmessage = async (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            console.log("📩 AssemblyAI:", message.message_type);
+      // Set up message handlers
+      aaiSocket.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          if (message.message_type === "SessionBegins") {
+            console.log("📡 AssemblyAI session started:", message.session_id);
+          } 
+          else if (message.message_type === "PartialTranscript") {
+            if (message.text) {
+              console.log(`🔄 Partial: "${message.text}"`);
+            }
+          } 
+          else if (message.message_type === "FinalTranscript") {
+            const text = message.text?.trim();
+            const confidence = message.confidence || 0;
             
-            if (message.message_type === "SessionBegins") {
-              console.log("✅ AssemblyAI session started, ID:", message.session_id);
-            } else if (message.message_type === "PartialTranscript") {
-              if (message.text) {
-                console.log(`📝 Partial: "${message.text}"`);
-              }
-            } else if (message.message_type === "FinalTranscript") {
-              const text = message.text?.trim();
-              const confidence = message.confidence || 0;
+            console.log(`✨ FINAL: "${text}" (confidence: ${confidence})`);
+            
+            if (text && confidence >= 0.5 && callId) {
+              const role = lastTrack === "outbound" ? "agent" : "customer";
               
-              console.log(`📝 FINAL: "${text}" (conf: ${confidence})`);
+              console.log(`💾 Saving: ${role} said "${text}"`);
               
-              if (text && confidence >= 0.6 && callId) {
-                const role = lastTrack === "outbound" ? "agent" : "customer";
-                
-                console.log(`💾 Saving transcript: ${role} -> "${text}"`);
-                
-                // Save transcript
-                const { error: transcriptError } = await supabase
-                  .from("transcripts")
-                  .insert({
-                    call_id: callId,
-                    role,
-                    text,
-                    created_at: new Date().toISOString()
-                  });
+              // Save transcript
+              const { error: transcriptError } = await supabase
+                .from("transcripts")
+                .insert({
+                  call_id: callId,
+                  role,
+                  text,
+                  created_at: new Date().toISOString()
+                });
 
-                if (transcriptError) {
-                  console.error("❌ Transcript save error:", transcriptError);
-                } else {
-                  console.log("✅ Transcript saved");
+              if (transcriptError) {
+                console.error("❌ Save error:", transcriptError);
+              } else {
+                console.log("✅ Transcript saved!");
+                
+                // Generate AI suggestion for customer messages
+                if (role === "customer") {
+                  console.log("🤖 Generating suggestion...");
                   
-                  // Generate AI suggestion for customer messages
-                  if (role === "customer") {
-                    console.log("🤖 Generating AI suggestion...");
-                    
-                    try {
-                      const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke(
-                        "generate-suggestion",
-                        { body: { callId, customerMessage: text } }
-                      );
+                  try {
+                    const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke(
+                      "generate-suggestion", 
+                      { body: { callId, customerMessage: text } }
+                    );
 
-                      if (suggestionError) {
-                        console.error("❌ Suggestion error:", suggestionError);
-                      } else if (suggestionData?.suggestion) {
-                        console.log("💡 AI suggestion:", suggestionData.suggestion);
-                        
-                        const { error: insertError } = await supabase
-                          .from("suggestions")
-                          .insert({
-                            call_id: callId,
-                            text: suggestionData.suggestion,
-                            created_at: new Date().toISOString()
-                          });
-
-                        if (insertError) {
-                          console.error("❌ Suggestion save error:", insertError);
-                        } else {
-                          console.log("✅ Suggestion saved");
-                        }
-                      }
-                    } catch (error) {
-                      console.error("❌ Suggestion generation error:", error);
+                    if (!suggestionError && suggestionData?.suggestion) {
+                      console.log("💡 AI suggests:", suggestionData.suggestion);
+                      
+                      await supabase.from("suggestions").insert({
+                        call_id: callId,
+                        text: suggestionData.suggestion,
+                        created_at: new Date().toISOString()
+                      });
+                      
+                      console.log("✅ Suggestion saved!");
                     }
+                  } catch (err) {
+                    console.error("❌ Suggestion error:", err);
                   }
                 }
               }
             }
-          } catch (error) {
-            console.error("❌ Error processing AssemblyAI message:", error);
+          } 
+          else if (message.message_type === "SessionTerminated") {
+            console.log("⚠️ Session terminated");
+            isConnected = false;
           }
-        };
-      });
+        } catch (error) {
+          console.error("❌ Message processing error:", error);
+        }
+      };
+
+      aaiSocket.onclose = (event) => {
+        isConnected = false;
+        console.log(`🔌 AssemblyAI closed: ${event.code} - ${event.reason}`);
+      };
+
+      aaiSocket.onerror = (error) => {
+        isConnected = false;
+        console.error("❌ AssemblyAI error:", error);
+      };
 
     } catch (error) {
       console.error("❌ Failed to connect to AssemblyAI:", error);
@@ -203,7 +202,7 @@ Deno.serve(async (req) => {
       
       else if (message.event === "start") {
         callSid = message.start?.callSid;
-        console.log("▶️ Call started, SID:", callSid);
+        console.log("▶️ Call started:", callSid);
 
         // Find call record
         if (callSid) {
@@ -213,23 +212,20 @@ Deno.serve(async (req) => {
             .eq("twilio_call_sid", callSid)
             .single();
 
-          if (error) {
-            console.error("❌ Call lookup error:", error);
-          } else if (callRecord) {
+          if (callRecord) {
             callId = callRecord.id;
-            console.log("✅ Found call ID:", callId);
+            console.log("✅ Call ID:", callId);
           } else {
-            console.log("⚠️ No call record found");
+            console.log("⚠️ No call record found for:", callSid);
           }
         }
 
         // Connect to AssemblyAI
         try {
-          console.log("🚀 Connecting to AssemblyAI...");
           await connectToAssemblyAI();
-          console.log("✅ AssemblyAI connected and ready");
+          console.log("🎯 Ready for transcription!");
         } catch (error) {
-          console.error("❌ AssemblyAI connection failed:", error);
+          console.error("❌ AssemblyAI setup failed:", error);
         }
       }
       
@@ -241,26 +237,29 @@ Deno.serve(async (req) => {
           lastTrack = track;
         }
 
-        if (audioPayload && isConnected && aaiSocket?.readyState === WebSocket.OPEN) {
-          try {
-            // Decode base64 audio from Twilio (mulaw format)
-            const binaryString = atob(audioPayload);
-            const audioBytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              audioBytes[i] = binaryString.charCodeAt(i);
+        if (audioPayload) {
+          if (isConnected && aaiSocket?.readyState === WebSocket.OPEN) {
+            try {
+              // Decode base64 audio from Twilio
+              const binaryString = atob(audioPayload);
+              const audioBytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                audioBytes[i] = binaryString.charCodeAt(i);
+              }
+              
+              // Send raw audio to AssemblyAI (they handle mulaw decoding)
+              aaiSocket.send(audioBytes.buffer);
+              
+              // Log occasionally for debugging
+              if (Math.random() < 0.001) { // 0.1% chance
+                console.log("📤 Audio sent:", audioBytes.length, "bytes");
+              }
+            } catch (error) {
+              console.error("❌ Audio error:", error);
             }
-            
-            // Send raw mulaw data directly to AssemblyAI
-            // AssemblyAI can handle mulaw at 8kHz
-            aaiSocket.send(audioBytes.buffer);
-            
-            // Uncomment for debugging
-            // console.log("📤 Audio sent:", audioBytes.length, "bytes, track:", track);
-          } catch (error) {
-            console.error("❌ Audio processing error:", error);
+          } else {
+            console.log("⏳ Audio received but AssemblyAI not connected");
           }
-        } else if (audioPayload && !isConnected) {
-          console.log("⏳ Audio received but AssemblyAI not connected");
         }
       }
       
@@ -274,12 +273,12 @@ Deno.serve(async (req) => {
         }
       }
     } catch (error) {
-      console.error("❌ Twilio message error:", error);
+      console.error("❌ Twilio error:", error);
     }
   };
 
   socket.onclose = () => {
-    console.log("🔌 Twilio WebSocket closed");
+    console.log("🔌 Twilio closed");
     if (aaiSocket) {
       aaiSocket.close();
       aaiSocket = null;
@@ -288,7 +287,7 @@ Deno.serve(async (req) => {
   };
 
   socket.onerror = (error) => {
-    console.error("❌ Twilio WebSocket error:", error);
+    console.error("❌ Twilio error:", error);
   };
 
   return response;
