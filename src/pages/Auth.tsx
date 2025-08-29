@@ -56,11 +56,26 @@ export const Auth = () => {
       const { error } = await signIn(signInEmail, signInPassword);
       
       if (error) {
-        toast({
-          title: "Sign In Failed",
-          description: error.message,
-          variant: "destructive",
-        });
+        // Handle specific error cases
+        if (error.message.includes('Invalid login credentials')) {
+          toast({
+            title: "Sign In Failed",
+            description: "Invalid email or password. If you just signed up, please check your email and confirm your account first.",
+            variant: "destructive",
+          });
+        } else if (error.message.includes('Email not confirmed')) {
+          toast({
+            title: "Email Not Confirmed",
+            description: "Please check your email and click the confirmation link before signing in.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Sign In Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "Welcome back!",
@@ -86,15 +101,24 @@ export const Auth = () => {
       const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName, role);
       
       if (error) {
-        toast({
-          title: "Sign Up Failed",
-          description: error.message,
-          variant: "destructive",
-        });
+        // Handle specific signup errors
+        if (error.message.includes('User already registered')) {
+          toast({
+            title: "Account Already Exists",
+            description: "An account with this email already exists. Please sign in instead.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Sign Up Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "Account Created!",
-          description: "Please check your email to verify your account.",
+          description: "Please check your email and click the confirmation link to activate your account before signing in.",
         });
         setActiveTab('signin');
       }
@@ -181,7 +205,13 @@ export const Auth = () => {
               <div className="mt-4 p-4 bg-muted rounded-lg">
                 <p className="text-sm font-medium mb-2">Demo Accounts:</p>
                 <p className="text-xs text-muted-foreground mb-1">Customer: customer1@test.com / password123</p>
-                <p className="text-xs text-muted-foreground">Agent: agent1@test.com / password123</p>
+                <p className="text-xs text-muted-foreground mb-3">Agent: agent1@test.com / password123</p>
+                
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                    📧 <strong>Important:</strong> After signing up, you must confirm your email before you can sign in. Check your inbox for the confirmation link!
+                  </p>
+                </div>
               </div>
               
             </TabsContent>
