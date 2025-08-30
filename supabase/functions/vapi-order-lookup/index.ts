@@ -18,30 +18,57 @@ serve(async (req) => {
   }
 
   try {
-    const { message } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { message = {} } = body;
     
-    const orderId = message?.parameters?.orderId;
-    const email = message?.parameters?.email;
+    // Enhanced parameter extraction with multiple fallback paths
+    const orderId = message?.parameters?.orderId || 
+                   message?.parameters?.order_id || 
+                   message?.orderId || 
+                   message?.order_number ||
+                   body.orderId ||
+                   body.order_id;
+                   
+    const email = message?.parameters?.email || 
+                 message?.email || 
+                 message?.customer?.email ||
+                 body.email;
     
-    console.log('VAPI Order Lookup:', { orderId, email });
+    console.log('VAPI Order Lookup:', { orderId, email, rawMessage: message });
 
     let orders = [];
+    let searchAttempted = false;
 
-    if (orderId) {
-      const order = await getOrderById(orderId);
-      if (order) orders = [order];
-    } else if (email) {
-      orders = await getOrdersByEmail(email);
+    // Try order ID lookup with validation
+    if (orderId && typeof orderId === 'string' && orderId.trim()) {
+      searchAttempted = true;
+      console.log('Attempting order lookup by ID:', orderId);
+      try {
+        const order = await getOrderById(orderId.trim());
+        if (order) orders = [order];
+      } catch (error) {
+        console.error('Error looking up order by ID:', error);
+      }
+    }
+    
+    // Try email lookup if no order found and email provided
+    if (orders.length === 0 && email && typeof email === 'string' && email.trim()) {
+      searchAttempted = true;
+      console.log('Attempting order lookup by email:', email);
+      try {
+        orders = await getOrdersByEmail(email.trim());
+      } catch (error) {
+        console.error('Error looking up orders by email:', error);
+      }
     }
 
+    // Enhanced response with better messaging
     const response = {
       result: orders.map(formatOrderData),
       count: orders.length,
-      message: orders.length > 0 
-        ? orders.length === 1 
-          ? `Found your order ${orders[0].order_number || '#' + orders[0].id.slice(-8)}`
-          : `Found ${orders.length} orders for ${email}`
-        : `Sorry, I couldn't find any orders ${orderId ? `with ID ${orderId}` : email ? `for ${email}` : ''}. Please check your order ID or email address.`
+      searchAttempted,
+      parameters: { orderId, email },
+      message: generateResponseMessage(orders, orderId, email, searchAttempted)
     };
 
     return new Response(JSON.stringify(response), {
@@ -51,7 +78,8 @@ serve(async (req) => {
     console.error('Error in vapi-order-lookup:', error);
     return new Response(JSON.stringify({ 
       error: 'Failed to lookup order information',
-      message: "I'm having trouble accessing order information right now. Please provide your order ID or email address."
+      message: "I'm having trouble accessing order information right now. Could you please provide your order number (like JD1, JD2) or email address? I can help you find your order details once I have the right information.",
+      suggestion: "Try saying 'My order number is JD1' or 'My email is customer@example.com'"
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -161,6 +189,26 @@ function formatOrderData(order: any) {
     itemCount: order.order_items?.length || 0,
     statusMessage: getStatusMessage(order.status)
   };
+}
+
+function generateResponseMessage(orders: any[], orderId: string, email: string, searchAttempted: boolean) {
+  if (orders.length > 0) {
+    if (orders.length === 1) {
+      return `Found your order ${orders[0].order_number || '#' + orders[0].id.slice(-8)}. ${getStatusMessage(orders[0].status)}`;
+    } else {
+      return `Found ${orders.length} orders for ${email}. Your most recent order is ${orders[0].order_number || '#' + orders[0].id.slice(-8)}`;
+    }
+  } else if (searchAttempted) {
+    if (orderId && email) {
+      return `I couldn't find any orders with ID "${orderId}" or for email "${email}". Please double-check your order number (like JD1, JD2) or email address.`;
+    } else if (orderId) {
+      return `I couldn't find an order with ID "${orderId}". Please check your order number - it should look like JD1, JD2, etc. You can also try providing your email address.`;
+    } else if (email) {
+      return `I couldn't find any orders for "${email}". Please verify your email address or try providing your order number instead.`;
+    }
+  }
+  
+  return "I need either your order number (like JD1, JD2) or email address to look up your order. Could you please provide one of these?";
 }
 
 function getStatusMessage(status: string) {
