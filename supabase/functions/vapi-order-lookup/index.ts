@@ -38,22 +38,15 @@ serve(async (req) => {
     
     console.log('VAPI Order Lookup:', { orderId, email, rawMessage: message });
 
-    // Use AI to normalize and complete inputs
-    const normalizedInputs = await normalizeInputsWithAI({ orderId, email });
-
     let orders = [];
     let searchAttempted = false;
 
-    // Use normalized inputs for better matching
-    const finalOrderId = normalizedInputs.orderId || orderId;
-    const finalEmail = normalizedInputs.email || email;
-
     // Try order ID lookup with validation
-    if (finalOrderId && typeof finalOrderId === 'string' && finalOrderId.trim()) {
+    if (orderId && typeof orderId === 'string' && orderId.trim()) {
       searchAttempted = true;
-      console.log('Attempting order lookup by ID:', finalOrderId, normalizedInputs.orderId ? '(AI normalized)' : '');
+      console.log('Attempting order lookup by ID:', orderId);
       try {
-        const order = await getOrderById(finalOrderId.trim());
+        const order = await getOrderById(orderId.trim());
         if (order) orders = [order];
       } catch (error) {
         console.error('Error looking up order by ID:', error);
@@ -61,11 +54,11 @@ serve(async (req) => {
     }
     
     // Try email lookup if no order found and email provided
-    if (orders.length === 0 && finalEmail && typeof finalEmail === 'string' && finalEmail.trim()) {
+    if (orders.length === 0 && email && typeof email === 'string' && email.trim()) {
       searchAttempted = true;
-      console.log('Attempting order lookup by email:', finalEmail, normalizedInputs.email ? '(AI normalized)' : '');
+      console.log('Attempting order lookup by email:', email);
       try {
-        orders = await getOrdersByEmail(finalEmail.trim());
+        orders = await getOrdersByEmail(email.trim());
       } catch (error) {
         console.error('Error looking up orders by email:', error);
       }
@@ -76,10 +69,8 @@ serve(async (req) => {
       result: orders.map(formatOrderData),
       count: orders.length,
       searchAttempted,
-      parameters: { orderId: finalOrderId, email: finalEmail },
-      originalParameters: { orderId, email },
-      normalizedInputs: normalizedInputs,
-      message: generateResponseMessage(orders, finalOrderId, finalEmail, searchAttempted)
+      parameters: { orderId, email },
+      message: generateResponseMessage(orders, orderId, email, searchAttempted)
     };
 
     return new Response(JSON.stringify(response), {
@@ -236,66 +227,5 @@ function getStatusMessage(status: string) {
       return 'Your order has been cancelled';
     default:
       return `Order status: ${status}`;
-  }
-}
-
-async function normalizeInputsWithAI(inputs: { orderId?: string; email?: string }) {
-  if (!openAIApiKey) {
-    console.log('No OpenAI API key found, skipping AI normalization');
-    return { orderId: null, email: null };
-  }
-
-  try {
-    const prompt = `You are a data normalization assistant for order lookup. Given user inputs that might be incomplete or malformed, normalize them to proper formats.
-
-Input data:
-- Order ID: "${inputs.orderId || 'none'}"
-- Email: "${inputs.email || 'none'}"
-
-Rules:
-1. Order IDs: Convert to proper format (e.g., "jt1" → "JD1", "j d 1" → "JD1", "order 1" → "JD1")
-2. Emails: Fix common typos, add missing domains if obvious (e.g., "customer at test" → "customer@test.com")
-
-Return ONLY a JSON object with normalized values or null if unable to normalize:
-{
-  "orderId": "normalized order ID or null",
-  "email": "normalized email or null"
-}`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 150,
-        temperature: 0.1
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('OpenAI API error:', response.status, response.statusText);
-      return { orderId: null, email: null };
-    }
-
-    const data = await response.json();
-    const normalizedText = data.choices[0].message.content.trim();
-    
-    try {
-      const normalized = JSON.parse(normalizedText);
-      console.log('AI normalized order inputs:', normalized);
-      return normalized;
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', normalizedText);
-      return { orderId: null, email: null };
-    }
-  } catch (error) {
-    console.error('Error in AI normalization:', error);
-    return { orderId: null, email: null };
   }
 }
