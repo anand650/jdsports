@@ -1,4 +1,4 @@
-# 🚀 Server Deployment Guide with HTTPS
+# 🚀 Server Deployment Guide with HTTPS (Fixed)
 
 ## **Quick Deployment on Server**
 
@@ -21,23 +21,24 @@ ssh root@195.35.45.87
 cd /root/vapi-aid
 ```
 
-### **Step 4: Deploy with HTTPS**
+### **Step 4: Deploy with Fixed HTTPS**
 
 ```bash
 # Make scripts executable
 chmod +x generate-ssl.sh
-chmod +x deploy-with-ssl.sh
+chmod +x deploy-fixed.sh
 
-# Deploy with SSL certificates
-sudo ./deploy-with-ssl.sh
+# Deploy with fixed SSL configuration
+sudo ./deploy-fixed.sh
 ```
 
 ## **What This Does**
 
 1. ✅ **Generates SSL certificates** for your server IP
-2. ✅ **Mounts certificates** into the Docker container
-3. ✅ **Starts nginx** with HTTPS configuration
-4. ✅ **Performs health checks** to verify everything works
+2. ✅ **Uses fixed Dockerfile** that resolves startup script issues
+3. ✅ **Mounts certificates** into the Docker container
+4. ✅ **Starts nginx** with HTTPS configuration
+5. ✅ **Performs health checks** to verify everything works
 
 ## **Access URLs**
 
@@ -50,8 +51,9 @@ After deployment, your application will be available at:
 ## **Files Created**
 
 - `generate-ssl.sh` - Generates SSL certificates
-- `deploy-with-ssl.sh` - Complete deployment script
-- `docker-compose-ssl.yml` - Docker config with SSL volume mount
+- `deploy-fixed.sh` - Fixed deployment script
+- `docker-compose-fixed.yml` - Docker config with fixed Dockerfile
+- `Dockerfile-fixed` - Fixed Dockerfile that resolves entrypoint issues
 - `ssl/` - Directory containing certificates
 
 ## **Troubleshooting**
@@ -60,7 +62,7 @@ After deployment, your application will be available at:
 
 ```bash
 # Check container logs
-docker-compose -f docker-compose-ssl.yml logs -f
+docker-compose -f docker-compose-fixed.yml logs -f
 
 # Check SSL certificates
 ls -la ssl/
@@ -88,8 +90,8 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 chmod 644 ssl/cert.pem
 chmod 600 ssl/key.pem
 
-# Deploy
-docker-compose -f docker-compose-ssl.yml up -d --build
+# Deploy with fixed configuration
+docker-compose -f docker-compose-fixed.yml up -d --build
 ```
 
 ## **Success Indicators**
@@ -109,5 +111,12 @@ After HTTPS is working, update your Twilio phone number webhook:
 4. Update **Voice Configuration**:
    - **Webhook URL**: `https://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-voice-webhook`
    - **HTTP Method**: POST
+
+## **What Was Fixed**
+
+- ✅ **Startup script issue** - Fixed Dockerfile entrypoint conflict
+- ✅ **SSL certificate mounting** - Proper volume mounting
+- ✅ **Nginx configuration** - HTTPS with HTTP redirect
+- ✅ **Container startup** - Proper initialization sequence
 
 **Your webhooks should now work with HTTPS!** 🚀
