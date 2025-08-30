@@ -117,7 +117,8 @@ async function lookupByEmail(email: string) {
 async function lookupByOrderId(orderId: string) {
   console.log('Looking up by order ID:', orderId);
   
-  const { data: orderData } = await supabase
+  // First try by order_number (JD1, JD2, etc.)
+  let { data: orderData } = await supabase
     .from('orders')
     .select(`
       *,
@@ -127,8 +128,26 @@ async function lookupByOrderId(orderId: string) {
       ),
       users (*)
     `)
-    .eq('id', orderId)
+    .eq('order_number', orderId)
     .single();
+
+  // If not found by order_number, try by UUID
+  if (!orderData) {
+    const result = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          *,
+          products (*)
+        ),
+        users (*)
+      `)
+      .eq('id', orderId)
+      .single();
+    
+    orderData = result.data;
+  }
     
   return orderData;
 }
@@ -138,19 +157,22 @@ function formatCustomerData(customerData: any) {
     name: customerData.name || customerData.full_name || customerData.userData?.full_name,
     email: customerData.email || customerData.userData?.email,
     phone: customerData.phone_number || customerData.userData?.phone_number,
-    totalOrders: 0,
+    totalOrders: customerData.total_orders || 0,
+    totalSpent: customerData.total_spent || 0,
+    loyaltyTier: customerData.loyalty_tier || 'bronze',
     recentOrders: [],
     callHistory: customerData.call_history_count || 0,
     lastInteraction: customerData.last_interaction_at,
     preferredLanguage: customerData.preferred_language || 'en',
     customerNotes: customerData.customer_notes,
-    tags: customerData.tags || []
+    tags: customerData.tags || [],
+    communicationPreference: customerData.communication_preference || 'email'
   };
 
   // Add order information if available
   if (customerData.order_items) {
     formatted.recentOrders = [{
-      id: customerData.id,
+      id: customerData.order_number || customerData.id,
       status: customerData.status,
       total: customerData.total_amount,
       items: customerData.order_items.map((item: any) => ({

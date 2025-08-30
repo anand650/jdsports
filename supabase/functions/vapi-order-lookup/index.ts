@@ -39,7 +39,7 @@ serve(async (req) => {
       count: orders.length,
       message: orders.length > 0 
         ? orders.length === 1 
-          ? `Found your order #${orders[0].id.slice(-8)}`
+          ? `Found your order ${orders[0].order_number || '#' + orders[0].id.slice(-8)}`
           : `Found ${orders.length} orders for ${email}`
         : `Sorry, I couldn't find any orders ${orderId ? `with ID ${orderId}` : email ? `for ${email}` : ''}. Please check your order ID or email address.`
     };
@@ -62,7 +62,8 @@ serve(async (req) => {
 async function getOrderById(orderId: string) {
   console.log('Getting order by ID:', orderId);
   
-  const { data, error } = await supabase
+  // First try to find by order_number (JD1, JD2, etc.)
+  let { data, error } = await supabase
     .from('orders')
     .select(`
       *,
@@ -72,8 +73,28 @@ async function getOrderById(orderId: string) {
       ),
       users (*)
     `)
-    .eq('id', orderId)
+    .eq('order_number', orderId)
     .single();
+
+  // If not found by order_number, try by UUID (for backward compatibility)
+  if (error && error.code === 'PGRST116') {
+    console.log('Order not found by order_number, trying UUID...');
+    const result = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          *,
+          products (*)
+        ),
+        users (*)
+      `)
+      .eq('id', orderId)
+      .single();
+    
+    data = result.data;
+    error = result.error;
+  }
     
   if (error && error.code !== 'PGRST116') throw error;
   return data;
@@ -112,12 +133,12 @@ async function getOrdersByEmail(email: string) {
 function formatOrderData(order: any) {
   return {
     id: order.id,
-    orderNumber: order.id.slice(-8),
+    orderNumber: order.order_number || `ORD-${order.id.slice(-8)}`,
     status: order.status,
     total: order.total_amount,
     totalFormatted: `$${parseFloat(order.total_amount).toFixed(2)}`,
-    created: order.created_at,
-    updated: order.updated_at,
+    created: new Date(order.created_at).toLocaleDateString(),
+    updated: new Date(order.updated_at).toLocaleDateString(),
     shippingAddress: order.shipping_address,
     customer: {
       name: order.users?.full_name,
