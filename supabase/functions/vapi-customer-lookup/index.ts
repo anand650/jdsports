@@ -112,11 +112,15 @@ async function lookupByPhone(phoneNumber: string) {
   console.log('Looking up by phone:', phoneNumber);
   
   // Try customer_profiles first (call center data)
-  const { data: profileData } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from('customer_profiles')
     .select('*')
     .eq('phone_number', phoneNumber)
-    .single();
+    .maybeSingle();
+  
+  if (profileError) {
+    console.error('Error looking up customer profile:', profileError);
+  }
   
   if (profileData) {
     // Get associated user data if exists
@@ -124,7 +128,7 @@ async function lookupByPhone(phoneNumber: string) {
       .from('users')
       .select('*')
       .eq('phone_number', phoneNumber)
-      .single();
+      .maybeSingle();
     
     return { ...profileData, userData };
   }
@@ -134,7 +138,7 @@ async function lookupByPhone(phoneNumber: string) {
     .from('users')
     .select('*')
     .eq('phone_number', phoneNumber)
-    .single();
+    .maybeSingle();
     
   return userData;
 }
@@ -165,7 +169,7 @@ async function lookupByEmail(email: string) {
 async function lookupByOrderId(orderId: string) {
   console.log('Looking up by order ID:', orderId);
   
-  // First try by order_number (JD1, JD2, etc.)
+  // First try by order_number (JD1, JD2, etc.) - case insensitive
   let { data: orderData } = await supabase
     .from('orders')
     .select(`
@@ -176,7 +180,7 @@ async function lookupByOrderId(orderId: string) {
       ),
       users (*)
     `)
-    .eq('order_number', orderId)
+    .ilike('order_number', orderId)
     .single();
 
   // If not found by order_number, try by UUID
