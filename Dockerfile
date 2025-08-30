@@ -19,14 +19,21 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine AS production
 
+# Install openssl for SSL certificate generation
+RUN apk add --no-cache openssl
+
 # Copy built application from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Expose port 80
-EXPOSE 80
+# Copy startup script
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Expose ports 80 and 443
+EXPOSE 80 443
+
+# Start with automatic HTTPS setup
+CMD ["/startup.sh"]
