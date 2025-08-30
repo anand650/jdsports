@@ -17,9 +17,9 @@ That's it! Your application will be available with HTTPS automatically.
 
 ## **Access Your Application**
 
-- **HTTPS**: `https://your-server-ip` or `https://your-domain.com`
-- **HTTP**: `http://your-server-ip` (redirects to HTTPS)
-- **Health Check**: `https://your-server-ip/health`
+- **HTTPS**: `https://your-server-ip:8443` or `https://your-domain.com:8443`
+- **HTTP**: `http://your-server-ip:8080` (redirects to HTTPS)
+- **Health Check**: `https://your-server-ip:8443/health`
 
 ## **SSL Certificate**
 

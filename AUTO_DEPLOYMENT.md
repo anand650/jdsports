@@ -22,7 +22,7 @@ That's it! Your application will be available with HTTPS automatically.
 ## 📋 **Prerequisites**
 
 - ✅ **Docker and Docker Compose** installed
-- ✅ **Ports 80 and 443** open in firewall
+- ✅ **Ports 8080 and 8443** open in firewall
 - ✅ **Server access** (VPS, local machine, etc.)
 
 ## 🔧 **Deployment Options**
@@ -64,9 +64,9 @@ docker-compose ps
 
 After deployment, your application will be available at:
 
-- **HTTPS**: `https://your-server-ip` or `https://your-domain.com`
-- **HTTP**: `http://your-server-ip` (redirects to HTTPS)
-- **Health Check**: `https://your-server-ip/health`
+- **HTTPS**: `https://your-server-ip:8443` or `https://your-domain.com:8443`
+- **HTTP**: `http://your-server-ip:8080` (redirects to HTTPS)
+- **Health Check**: `https://your-server-ip:8443/health`
 
 ## 🔒 **SSL Certificate Details**
 
@@ -81,12 +81,14 @@ After deployment, your application will be available at:
 
 ```bash
 # Check what's using the ports
-sudo netstat -tulnp | grep :80
-sudo netstat -tulnp | grep :443
+sudo netstat -tulnp | grep :8080
+sudo netstat -tulnp | grep :8443
 
 # Stop conflicting services
 sudo systemctl stop nginx
 sudo systemctl stop apache2
+
+# Or use different ports by editing docker-compose.yml
 ```
 
 ### **Docker Build Failed**

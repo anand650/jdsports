@@ -49,14 +49,14 @@ print_status "🏥 Performing health check..."
 SERVER_IP=$(curl -s https://ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}')
 
 # Try HTTPS first
-if curl -f -k https://$SERVER_IP/health > /dev/null 2>&1; then
+if curl -f -k https://$SERVER_IP:8443/health > /dev/null 2>&1; then
     print_status "✅ HTTPS deployment successful!"
-    print_status "🌐 Access your application at: https://$SERVER_IP"
-    print_status "📊 Health check: https://$SERVER_IP/health"
+    print_status "🌐 Access your application at: https://$SERVER_IP:8443"
+    print_status "📊 Health check: https://$SERVER_IP:8443/health"
     print_status "🔒 SSL certificate: Auto-generated"
-elif curl -f http://$SERVER_IP/health > /dev/null 2>&1; then
+elif curl -f http://$SERVER_IP:8080/health > /dev/null 2>&1; then
     print_status "✅ HTTP deployment successful!"
-    print_status "🌐 Access your application at: http://$SERVER_IP"
+    print_status "🌐 Access your application at: http://$SERVER_IP:8080"
     print_warning "⚠️  HTTPS may need a moment to initialize"
 else
     print_error "❌ Health check failed. Checking logs..."
