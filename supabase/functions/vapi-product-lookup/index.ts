@@ -12,6 +12,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -39,26 +41,34 @@ serve(async (req) => {
     
     console.log('VAPI Product Lookup:', { productQuery, category, brand, rawMessage: message });
 
+    // Use AI to normalize and complete inputs
+    const normalizedInputs = await normalizeInputsWithAI({ productQuery, category, brand });
+
     let products = [];
     let searchAttempted = false;
     let searchType = null;
 
+    // Use normalized inputs for better matching
+    const finalProductQuery = normalizedInputs.productQuery || productQuery;
+    const finalCategory = normalizedInputs.category || category;
+    const finalBrand = normalizedInputs.brand || brand;
+
     // Enhanced search with validation and error handling
-    if (productQuery && typeof productQuery === 'string' && productQuery.trim()) {
+    if (finalProductQuery && typeof finalProductQuery === 'string' && finalProductQuery.trim()) {
       searchType = 'query';
       searchAttempted = true;
-      console.log('Searching products by query:', productQuery);
+      console.log('Searching products by query:', finalProductQuery, normalizedInputs.productQuery ? '(AI normalized)' : '');
       try {
-        products = await searchProducts(productQuery.trim(), category, brand);
+        products = await searchProducts(finalProductQuery.trim(), finalCategory, finalBrand);
       } catch (error) {
         console.error('Error searching products by query:', error);
       }
-    } else if (category && typeof category === 'string' && category.trim()) {
+    } else if (finalCategory && typeof finalCategory === 'string' && finalCategory.trim()) {
       searchType = 'category';
       searchAttempted = true;
-      console.log('Searching products by category:', category);
+      console.log('Searching products by category:', finalCategory, normalizedInputs.category ? '(AI normalized)' : '');
       try {
-        products = await getProductsByCategory(category.trim());
+        products = await getProductsByCategory(finalCategory.trim());
       } catch (error) {
         console.error('Error searching products by category:', error);
       }
@@ -78,8 +88,10 @@ serve(async (req) => {
       count: products.length,
       searchType,
       searchAttempted,
-      parameters: { productQuery, category, brand },
-      message: generateProductResponseMessage(products, { productQuery, category, brand }, searchAttempted)
+      parameters: { productQuery: finalProductQuery, category: finalCategory, brand: finalBrand },
+      originalParameters: { productQuery, category, brand },
+      normalizedInputs: normalizedInputs,
+      message: generateProductResponseMessage(products, { productQuery: finalProductQuery, category: finalCategory, brand: finalBrand }, searchAttempted)
     };
 
     return new Response(JSON.stringify(response), {
@@ -196,4 +208,68 @@ function formatProductData(product: any) {
       : 'Out of stock',
     priceFormatted: price > 0 ? `$${price.toFixed(2)}` : 'Price not available'
   };
+}
+
+async function normalizeInputsWithAI(inputs: { productQuery?: string; category?: string; brand?: string }) {
+  if (!openAIApiKey) {
+    console.log('No OpenAI API key found, skipping AI normalization');
+    return { productQuery: null, category: null, brand: null };
+  }
+
+  try {
+    const prompt = `You are a product search normalization assistant. Given user inputs that might be incomplete or malformed, normalize them to proper formats for product search.
+
+Input data:
+- Product Query: "${inputs.productQuery || 'none'}"
+- Category: "${inputs.category || 'none'}"
+- Brand: "${inputs.brand || 'none'}"
+
+Rules:
+1. Product queries: Fix typos, expand abbreviations (e.g., "nike air" → "Nike Air Max", "adidas shoe" → "Adidas sneakers")
+2. Categories: Normalize to standard categories (e.g., "shoe" → "footwear", "shirt" → "clothing")
+3. Brands: Fix brand name spellings (e.g., "adidas" → "Adidas", "nike" → "Nike")
+
+Return ONLY a JSON object with normalized values or null if unable to normalize:
+{
+  "productQuery": "normalized product query or null",
+  "category": "normalized category or null",
+  "brand": "normalized brand name or null"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 150,
+        temperature: 0.1
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('OpenAI API error:', response.status, response.statusText);
+      return { productQuery: null, category: null, brand: null };
+    }
+
+    const data = await response.json();
+    const normalizedText = data.choices[0].message.content.trim();
+    
+    try {
+      const normalized = JSON.parse(normalizedText);
+      console.log('AI normalized product inputs:', normalized);
+      return normalized;
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', normalizedText);
+      return { productQuery: null, category: null, brand: null };
+    }
+  } catch (error) {
+    console.error('Error in AI normalization:', error);
+    return { productQuery: null, category: null, brand: null };
+  }
 }

@@ -12,6 +12,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -42,39 +44,47 @@ serve(async (req) => {
     
     console.log('VAPI Customer Lookup:', { phoneNumber, email, orderId, rawMessage: message });
 
+    // Use AI to normalize and complete inputs if they seem incomplete or malformed
+    const normalizedInputs = await normalizeInputsWithAI({ phoneNumber, email, orderId });
+
     let customerData = null;
     let searchMethod = null;
     let searchAttempted = false;
 
     // Try different lookup methods with validation and error handling
-    if (phoneNumber && typeof phoneNumber === 'string' && phoneNumber.trim()) {
+    // Use normalized inputs for better matching
+    const finalPhoneNumber = normalizedInputs.phoneNumber || phoneNumber;
+    const finalEmail = normalizedInputs.email || email;
+    const finalOrderId = normalizedInputs.orderId || orderId;
+    
+    if (finalPhoneNumber && typeof finalPhoneNumber === 'string' && finalPhoneNumber.trim()) {
       searchMethod = 'phone';
       searchAttempted = true;
-      console.log('Attempting customer lookup by phone:', phoneNumber);
+      console.log('Attempting customer lookup by phone:', finalPhoneNumber, normalizedInputs.phoneNumber ? '(AI normalized)' : '');
       try {
-        customerData = await lookupByPhone(phoneNumber.trim());
+        customerData = await lookupByPhone(finalPhoneNumber.trim());
       } catch (error) {
         console.error('Error looking up customer by phone:', error);
       }
     }
     
-    if (!customerData && email && typeof email === 'string' && email.trim()) {
+    if (!customerData && finalEmail && typeof finalEmail === 'string' && finalEmail.trim()) {
       searchMethod = 'email';
       searchAttempted = true;
-      console.log('Attempting customer lookup by email:', email);
+      console.log('Attempting customer lookup by email:', finalEmail, normalizedInputs.email ? '(AI normalized)' : '');
       try {
-        customerData = await lookupByEmail(email.trim());
+        customerData = await lookupByEmail(finalEmail.trim());
       } catch (error) {
         console.error('Error looking up customer by email:', error);
       }
     }
     
-    if (!customerData && orderId && typeof orderId === 'string' && orderId.trim()) {
+    if (!customerData && finalOrderId && typeof finalOrderId === 'string' && finalOrderId.trim()) {
       searchMethod = 'orderId';
       searchAttempted = true;
-      console.log('Attempting customer lookup by order ID:', orderId);
+      console.log('Attempting customer lookup by order ID:', finalOrderId, normalizedInputs.orderId ? '(AI normalized)' : '');
       try {
-        customerData = await lookupByOrderId(orderId.trim());
+        customerData = await lookupByOrderId(finalOrderId.trim());
         if (customerData) {
           // Extract customer data from order data
           customerData = customerData.users || customerData;
@@ -88,8 +98,10 @@ serve(async (req) => {
       result: customerData ? formatCustomerData(customerData) : null,
       searchMethod,
       searchAttempted,
-      parameters: { phoneNumber, email, orderId },
-      message: generateCustomerResponseMessage(customerData, { phoneNumber, email, orderId }, searchAttempted)
+      parameters: { phoneNumber: finalPhoneNumber, email: finalEmail, orderId: finalOrderId },
+      originalParameters: { phoneNumber, email, orderId },
+      normalizedInputs: normalizedInputs,
+      message: generateCustomerResponseMessage(customerData, { phoneNumber: finalPhoneNumber, email: finalEmail, orderId: finalOrderId }, searchAttempted)
     };
 
     return new Response(JSON.stringify(response), {
@@ -251,4 +263,68 @@ function formatCustomerData(customerData: any) {
   }
 
   return formatted;
+}
+
+async function normalizeInputsWithAI(inputs: { phoneNumber?: string; email?: string; orderId?: string }) {
+  if (!openAIApiKey) {
+    console.log('No OpenAI API key found, skipping AI normalization');
+    return { phoneNumber: null, email: null, orderId: null };
+  }
+
+  try {
+    const prompt = `You are a data normalization assistant. Given user inputs that might be incomplete or malformed, normalize them to proper formats.
+
+Input data:
+- Phone number: "${inputs.phoneNumber || 'none'}"
+- Email: "${inputs.email || 'none'}"
+- Order ID: "${inputs.orderId || 'none'}"
+
+Rules:
+1. Phone numbers: Add country code if missing (default +91 for India), format properly
+2. Emails: Fix common typos, add missing domains if obvious (e.g., "customer1 at s" → "customer1@s.com")
+3. Order IDs: Convert to proper format (e.g., "jt1" → "JD1", "j d 1" → "JD1")
+
+Return ONLY a JSON object with normalized values or null if unable to normalize:
+{
+  "phoneNumber": "normalized phone or null",
+  "email": "normalized email or null", 
+  "orderId": "normalized order ID or null"
+}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 200,
+        temperature: 0.1
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('OpenAI API error:', response.status, response.statusText);
+      return { phoneNumber: null, email: null, orderId: null };
+    }
+
+    const data = await response.json();
+    const normalizedText = data.choices[0].message.content.trim();
+    
+    try {
+      const normalized = JSON.parse(normalizedText);
+      console.log('AI normalized inputs:', normalized);
+      return normalized;
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', normalizedText);
+      return { phoneNumber: null, email: null, orderId: null };
+    }
+  } catch (error) {
+    console.error('Error in AI normalization:', error);
+    return { phoneNumber: null, email: null, orderId: null };
+  }
 }
