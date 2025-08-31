@@ -200,22 +200,22 @@ export const CustomerChatHistory = ({ customerProfile, className }: CustomerChat
             <p className="text-sm text-muted-foreground">No chat history found</p>
           </div>
         ) : (
-          <div className="flex h-96">
+          <div className="flex h-80">
             {/* Sessions List */}
             <div className="w-1/2 border-r">
               <ScrollArea className="h-full">
-                <div className="p-2 space-y-2">
+                <div className="p-1 space-y-1">
                   {chatSessions.map((session) => (
                     <div
                       key={session.id}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                      className={`p-2 rounded cursor-pointer transition-colors hover:bg-muted/50 ${
                         selectedSession?.id === session.id ? 'bg-muted' : ''
                       }`}
                       onClick={() => handleSessionClick(session)}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium">
-                          {session.session_token}
+                        <span className="text-xs font-medium truncate">
+                          #{session.session_token.slice(-6)}
                         </span>
                         {getStatusBadge(session.status)}
                       </div>
@@ -223,11 +223,6 @@ export const CustomerChatHistory = ({ customerProfile, className }: CustomerChat
                         <Clock className="h-3 w-3" />
                         {formatDate(session.created_at)}
                       </div>
-                      {session.users?.full_name && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {session.users.full_name}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -238,19 +233,19 @@ export const CustomerChatHistory = ({ customerProfile, className }: CustomerChat
             <div className="flex-1">
               {selectedSession ? (
                 <div className="h-full flex flex-col">
-                  <div className="p-3 border-b bg-muted/30">
-                    <div className="text-sm font-medium">
-                      Session: {selectedSession.session_token}
+                  <div className="p-2 border-b bg-muted/30">
+                    <div className="text-xs font-medium truncate">
+                      #{selectedSession.session_token.slice(-6)}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {formatDate(selectedSession.created_at)}
                     </div>
                   </div>
                   <ScrollArea className="flex-1">
-                    <div className="p-3 space-y-3">
+                    <div className="p-2 space-y-2">
                       {messages.map((message) => (
                         <div key={message.id} className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             {getSenderIcon(message.sender_type)}
                             <span className="text-xs font-medium capitalize">
                               {message.sender_type}
@@ -259,14 +254,14 @@ export const CustomerChatHistory = ({ customerProfile, className }: CustomerChat
                               {formatDate(message.created_at)}
                             </span>
                           </div>
-                          <div className="text-sm pl-5">
+                          <div className="text-xs pl-4">
                             {message.content}
                           </div>
                         </div>
                       ))}
                       {messages.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center">
-                          No messages in this session
+                        <p className="text-xs text-muted-foreground text-center">
+                          No messages
                         </p>
                       )}
                     </div>
@@ -274,8 +269,8 @@ export const CustomerChatHistory = ({ customerProfile, className }: CustomerChat
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-sm text-muted-foreground">
-                    Select a session to view messages
+                  <p className="text-xs text-muted-foreground">
+                    Select a session
                   </p>
                 </div>
               )}
