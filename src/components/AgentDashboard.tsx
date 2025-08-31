@@ -209,6 +209,8 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
               .eq('id', session.user_id)
               .single();
             
+            console.log(`User data for session ${session.id}:`, userData);
+            
             return {
               ...session,
               user: userData || null
