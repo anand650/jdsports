@@ -308,7 +308,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
       if (error) throw error;
 
-      // Message will be added via real-time subscription
+      // Message will be added via real-time subscription - don't add manually
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
