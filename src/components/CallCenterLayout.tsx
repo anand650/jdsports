@@ -6,6 +6,7 @@ import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { CallHistory } from './CallHistory';
 import { CustomerInfoPanel } from './CustomerInfoPanel';
 import { EnhancedCustomerInfoPanel } from './EnhancedCustomerInfoPanel';
+import { CustomerChatHistory } from './CustomerChatHistory';
 import { CallDetailsModal } from './CallDetailsModal';
 import { IncomingCallNotification } from './IncomingCallNotification';
 import { Call, CustomerProfile } from '@/types/call-center';
@@ -288,11 +289,20 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
                 />
               </div>
               
-              {/* Right Side - Call History */}
-              <div className="w-80">
-                <CallHistory 
-                  onSelectCall={handleSelectCall}
-                />
+              {/* Right Side - Call History and Chat History */}
+              <div className="w-80 flex flex-col gap-4">
+                <div className="flex-1">
+                  <CallHistory 
+                    onSelectCall={handleSelectCall}
+                    className="h-full"
+                  />
+                </div>
+                <div className="flex-1">
+                  <CustomerChatHistory 
+                    customerProfile={customerProfile}
+                    className="h-full"
+                  />
+                </div>
               </div>
             </div>
           </div>
