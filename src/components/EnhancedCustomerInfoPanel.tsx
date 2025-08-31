@@ -67,11 +67,13 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
     setLoading(true);
     try {
       // Find user account by phone number
-      const { data: user } = await supabase
+      const { data: userData } = await supabase
         .from('users')
         .select('*')
         .eq('phone_number', profile.phone_number)
-        .maybeSingle();
+        .limit(1);
+
+      const user = userData?.[0] || null;
 
       let orders = [];
       let totalSpent = 0;
