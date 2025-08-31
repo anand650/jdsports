@@ -130,20 +130,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         }
       }
 
-      // Start real transcription for this call
-      try {
-        await supabase.functions.invoke('twilio-start-transcription', {
-          body: { callId: callToAnswer.id }
-        });
-        console.log('Real transcription started for call:', callToAnswer.id);
-      } catch (transcriptionError) {
-        console.error('Failed to start transcription:', transcriptionError);
-        toast({
-          title: "Transcription Warning",
-          description: "Transcription may not be available for this call",
-          variant: "destructive",
-        });
-      }
+      // Transcription is automatically started by Twilio webhook
+      console.log('Transcription is already active for call:', callToAnswer.id);
 
     } catch (error) {
       console.error('Error answering call:', error);
