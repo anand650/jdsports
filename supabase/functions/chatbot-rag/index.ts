@@ -122,6 +122,7 @@ serve(async (req) => {
           .from('orders')
           .select(`
             id,
+            order_number,
             total_amount,
             status,
             created_at,
@@ -142,7 +143,7 @@ serve(async (req) => {
 
         if (orders && orders.length > 0) {
           userOrders = orders.map(order => 
-            `Order #${order.id.slice(-8)}: £${order.total_amount} - ${order.status} - ${new Date(order.created_at).toLocaleDateString()} - Items: ${order.order_items?.map(item => `${item.quantity}x ${item.product?.name}`).join(', ')}`
+            `Order ${order.order_number || '#' + order.id.slice(-8)}: £${order.total_amount} - ${order.status} - ${new Date(order.created_at).toLocaleDateString()} - Items: ${order.order_items?.map(item => `${item.quantity}x ${item.product?.name}`).join(', ')}`
           ).join('\n');
         }
 
