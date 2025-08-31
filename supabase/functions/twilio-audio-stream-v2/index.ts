@@ -138,19 +138,37 @@ Deno.serve(async (req) => {
             console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
             if (isFormatted && transcript.trim() && callId) {
-              // Improved role detection based on track and call context
+              // Enhanced role detection with multiple strategies
               let role = "customer"; // Default to customer
               
-              console.log("🎯 Role detection - lastTrack:", lastTrack);
+              console.log("🎯 Role detection - lastTrack:", lastTrack, "transcript:", transcript.trim());
               
-              // Determine role based on track information
+              // Strategy 1: Track-based detection
               if (lastTrack === "outbound") {
                 role = "agent";
               } else if (lastTrack === "inbound") {
                 role = "customer";
               }
               
-              console.log("👤 Determined role:", role, "for transcript:", transcript.trim());
+              // Strategy 2: Content-based detection (fallback)
+              const agentPhrases = [
+                "customer support",
+                "customer service", 
+                "how can i help",
+                "how may i assist",
+                "jd sports",
+                "thank you for calling"
+              ];
+              
+              const lowerTranscript = transcript.toLowerCase();
+              const isLikelyAgent = agentPhrases.some(phrase => lowerTranscript.includes(phrase));
+              
+              if (isLikelyAgent && role === "customer") {
+                role = "agent";
+                console.log("🔄 Role corrected to agent based on content analysis");
+              }
+              
+              console.log("👤 Final determined role:", role, "for transcript:", transcript.trim());
               
               // Save transcript to database
               const { error: transcriptError } = await supabase
