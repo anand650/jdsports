@@ -140,3 +140,5 @@ echo "   • Rebuild: docker-compose up -d --build"
 if [ ! -z "$DOMAIN" ]; then
     echo "   • Renew SSL: ./renew-ssl.sh"
 fi
+
+

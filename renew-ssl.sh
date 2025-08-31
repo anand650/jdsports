@@ -86,3 +86,5 @@ print_status "✅ SSL renewal process completed!"
 # Show next renewal date
 print_status "📅 Next renewal check:"
 certbot certificates
+
+

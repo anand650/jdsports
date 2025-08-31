@@ -129,3 +129,6 @@ docker-compose logs -f
 - ✅ **Health check** returns "healthy"
 - ✅ **HTTPS access** works on port 8443
 - ✅ **HTTP access** works on port 8080
+
+
+

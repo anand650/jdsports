@@ -88,3 +88,5 @@ else
     echo "✅ Self-signed certificates generated!"
     echo "⚠️  Note: Browsers will show security warnings with self-signed certificates"
 fi
+
+

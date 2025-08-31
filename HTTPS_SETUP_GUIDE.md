@@ -289,3 +289,5 @@ If you encounter issues:
 3. **Test connectivity**: `curl -I https://your-domain.com`
 4. **Check firewall**: Ensure ports 80 and 443 are open
 5. **Verify DNS**: Make sure your domain points to the server
+
+
