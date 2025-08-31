@@ -307,13 +307,6 @@ export const AnalyticsDashboard = () => {
                 {analytics.avgSatisfactionScore.toFixed(1)}/5
               </Badge>
             </div>
-            <Button 
-              onClick={() => window.open('/reports', '_blank')} 
-              variant="outline" 
-              className="w-full"
-            >
-              View Detailed Reports
-            </Button>
           </CardContent>
         </Card>
       </div>
