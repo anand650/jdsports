@@ -269,36 +269,35 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
 
         {/* Main Content Area */}
         <main className={`flex-1 ${showHeader ? 'pt-12' : ''}`}>
-          <div className="h-[calc(100vh-3rem)] p-4">
-            {/* Grid Layout - 2x2 with customer info spanning height */}
-            <div className="grid grid-cols-4 gap-4 h-full">
-              {/* Left Column - Transcript */}
-              <div className="col-span-1">
-                <LiveTranscriptPanel callId={activeCall?.id || null} />
+          <div className="h-[calc(100vh-3rem)] p-4 flex flex-col gap-4">
+            <div className="flex gap-4 h-full">
+              {/* Left Side - Transcript and Suggestions */}
+              <div className="flex-1 flex flex-col gap-4">
+                <div className="flex-1">
+                  <LiveTranscriptPanel callId={activeCall?.id || null} />
+                </div>
+                <div className="flex-1">
+                  <AISuggestionsPanel callId={activeCall?.id || null} />
+                </div>
               </div>
               
-              {/* Center-Left Column - Suggestions */}
-              <div className="col-span-1">
-                <AISuggestionsPanel callId={activeCall?.id || null} />
-              </div>
-              
-              {/* Center-Right Column - Customer Info */}
-              <div className="col-span-1">
+              {/* Center - Customer Info */}
+              <div className="w-80">
                 <EnhancedCustomerInfoPanel 
                   customerProfile={customerProfile}
                   activeCall={activeCall}
                 />
               </div>
               
-              {/* Right Column - Split between Call History and Chat History */}
-              <div className="col-span-1 flex flex-col gap-4">
-                <div className="h-1/2">
+              {/* Right Side - Call History and Chat History */}
+              <div className="w-80 flex flex-col gap-4">
+                <div className="flex-1">
                   <CallHistory 
                     onSelectCall={handleSelectCall}
                     className="h-full"
                   />
                 </div>
-                <div className="h-1/2">
+                <div className="flex-1">
                   <CustomerChatHistory 
                     customerProfile={customerProfile}
                     className="h-full"
