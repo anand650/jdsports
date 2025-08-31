@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Deploy JD Sports AI Assistant with Simple SSL Setup
-echo "🚀 Deploying JD Sports AI Assistant with simple SSL setup..."
+# Deploy JD Sports AI Assistant with Fixed SSL Setup
+echo "🚀 Deploying JD Sports AI Assistant with fixed SSL setup..."
 
 # Function to print colored output
 print_status() {
