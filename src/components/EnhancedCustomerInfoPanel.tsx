@@ -237,7 +237,7 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">
-                      {customerData.profile?.name || 'Unknown Customer'}
+                      {customerData.user?.full_name || customerData.profile?.name || 'Unknown Customer'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {customerData.profile?.phone_number}
