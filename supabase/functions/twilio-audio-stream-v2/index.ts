@@ -138,37 +138,49 @@ Deno.serve(async (req) => {
             console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
             if (isFormatted && transcript.trim() && callId) {
-              // Enhanced role detection with multiple strategies
+              // Device-aware role detection for different audio sources
               let role = "customer"; // Default to customer
               
-              console.log("🎯 Role detection - lastTrack:", lastTrack, "transcript:", transcript.trim());
+              console.log("🎯 Device-based role detection:");
+              console.log("   - lastTrack:", lastTrack);
+              console.log("   - transcript:", transcript.trim());
               
-              // Strategy 1: Track-based detection
+              // Primary: Track-based detection (most reliable for different devices)
               if (lastTrack === "outbound") {
                 role = "agent";
+                console.log("   - ✅ AGENT detected (outbound track from agent device)");
               } else if (lastTrack === "inbound") {
                 role = "customer";
+                console.log("   - ✅ CUSTOMER detected (inbound track from customer device)");
+              } else {
+                console.log("   - ⚠️ No track info, using content analysis");
+                
+                // Fallback: Content-based detection for agent identification
+                const agentPhrases = [
+                  "customer support",
+                  "customer service", 
+                  "how can i help",
+                  "how may i assist",
+                  "jd sports",
+                  "thank you for calling",
+                  "good morning",
+                  "good afternoon", 
+                  "may i have your",
+                  "can you please provide"
+                ];
+                
+                const lowerTranscript = transcript.toLowerCase();
+                const isLikelyAgent = agentPhrases.some(phrase => lowerTranscript.includes(phrase));
+                
+                if (isLikelyAgent) {
+                  role = "agent";
+                  console.log("   - 🔄 Role corrected to AGENT based on content analysis");
+                } else {
+                  console.log("   - 📞 Defaulting to CUSTOMER (no agent indicators found)");
+                }
               }
               
-              // Strategy 2: Content-based detection (fallback)
-              const agentPhrases = [
-                "customer support",
-                "customer service", 
-                "how can i help",
-                "how may i assist",
-                "jd sports",
-                "thank you for calling"
-              ];
-              
-              const lowerTranscript = transcript.toLowerCase();
-              const isLikelyAgent = agentPhrases.some(phrase => lowerTranscript.includes(phrase));
-              
-              if (isLikelyAgent && role === "customer") {
-                role = "agent";
-                console.log("🔄 Role corrected to agent based on content analysis");
-              }
-              
-              console.log("👤 Final determined role:", role, "for transcript:", transcript.trim());
+              console.log("👤 FINAL ROLE:", role.toUpperCase(), "for transcript:", transcript.trim());
               
               // Save transcript to database
               const { error: transcriptError } = await supabase
@@ -183,11 +195,11 @@ Deno.serve(async (req) => {
               if (transcriptError) {
                 console.error("❌ Save transcript error:", transcriptError);
               } else {
-                console.log("✅ Transcript saved with role:", role);
+                console.log("✅ Transcript saved with role:", role.toUpperCase());
                 
-                // Generate AI suggestion for customer messages
+                // Generate AI suggestion for customer messages only
                 if (role === "customer") {
-                  console.log("🤖 Generating suggestion...");
+                  console.log("🤖 Generating AI suggestion for customer message...");
                   
                   try {
                     const { data: suggestionData, error: suggestionError } = await supabase.functions.invoke(
@@ -209,6 +221,8 @@ Deno.serve(async (req) => {
                   } catch (err) {
                     console.error("❌ Suggestion error:", err);
                   }
+                } else {
+                  console.log("ℹ️ No suggestion needed for agent message");
                 }
               }
             }
@@ -312,9 +326,10 @@ Deno.serve(async (req) => {
         
         console.log("🎵 Media event - Track:", track, "Payload length:", audioPayload?.length);
         
+        // Store track information with more detailed logging
         if (track) {
+          console.log("📡 Previous track:", lastTrack, "→ New track:", track);
           lastTrack = track;
-          console.log("🔄 Track updated to:", lastTrack);
         }
 
         if (audioPayload && isAssemblyConnected) {
@@ -325,8 +340,11 @@ Deno.serve(async (req) => {
             // Convert MuLaw to PCM16
             const pcmData = muLawToPcm16(muLawData);
             
-            // Add to chunks with track info
+            // Add to chunks with track context
             audioChunks.push(pcmData);
+            
+            // Log track context for debugging
+            console.log("🎤 Processing audio for track:", lastTrack);
             
             // Send chunk when we have enough data
             sendAudioChunk();
