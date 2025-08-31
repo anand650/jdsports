@@ -138,8 +138,9 @@ Deno.serve(async (req) => {
             console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
             if (isFormatted && transcript.trim() && callId) {
-              // Determine role based on last track
+              // Determine role based on last track with enhanced logging
               const role = lastTrack === "outbound" ? "agent" : "customer";
+              console.log("🎯 Role determination - lastTrack:", lastTrack, "→ role:", role);
               
               // Save transcript to database
               const { error: transcriptError } = await supabase
@@ -281,7 +282,11 @@ Deno.serve(async (req) => {
         const track = message.media?.track;
         const audioPayload = message.media?.payload;
         
+        // Debug logging for track info
+        console.log("🎧 Media event - Track:", track, "Payload length:", audioPayload?.length || 0);
+        
         if (track) {
+          console.log("📊 Track updated from", lastTrack, "to", track);
           lastTrack = track;
         }
 
