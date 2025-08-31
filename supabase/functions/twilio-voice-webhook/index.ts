@@ -117,7 +117,7 @@ serve(async (req) => {
         <Response>
           <Say voice="alice">Connecting you to our agent.</Say>
           <Start>
-            <Stream url="wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream-v2" track="both_tracks" />
+            <Stream url="wss://wtradfuzjapqkowjpmew.supabase.co/functions/v1/twilio-audio-stream-v2" />
           </Start>
           <Dial timeout="30" 
                 record="record-from-ringing" 
