@@ -138,8 +138,19 @@ Deno.serve(async (req) => {
             console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
             if (isFormatted && transcript.trim() && callId) {
-              // Determine role based on last track
-              const role = lastTrack === "outbound" ? "agent" : "customer";
+              // Improved role detection based on track and call context
+              let role = "customer"; // Default to customer
+              
+              console.log("🎯 Role detection - lastTrack:", lastTrack);
+              
+              // Determine role based on track information
+              if (lastTrack === "outbound") {
+                role = "agent";
+              } else if (lastTrack === "inbound") {
+                role = "customer";
+              }
+              
+              console.log("👤 Determined role:", role, "for transcript:", transcript.trim());
               
               // Save transcript to database
               const { error: transcriptError } = await supabase
@@ -154,7 +165,7 @@ Deno.serve(async (req) => {
               if (transcriptError) {
                 console.error("❌ Save transcript error:", transcriptError);
               } else {
-                console.log("✅ Transcript saved!");
+                console.log("✅ Transcript saved with role:", role);
                 
                 // Generate AI suggestion for customer messages
                 if (role === "customer") {
@@ -281,8 +292,11 @@ Deno.serve(async (req) => {
         const track = message.media?.track;
         const audioPayload = message.media?.payload;
         
+        console.log("🎵 Media event - Track:", track, "Payload length:", audioPayload?.length);
+        
         if (track) {
           lastTrack = track;
+          console.log("🔄 Track updated to:", lastTrack);
         }
 
         if (audioPayload && isAssemblyConnected) {
@@ -293,7 +307,7 @@ Deno.serve(async (req) => {
             // Convert MuLaw to PCM16
             const pcmData = muLawToPcm16(muLawData);
             
-            // Add to chunks
+            // Add to chunks with track info
             audioChunks.push(pcmData);
             
             // Send chunk when we have enough data
