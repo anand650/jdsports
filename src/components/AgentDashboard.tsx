@@ -52,7 +52,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
               .from('chat_sessions')
               .select(`
                 *,
-                users!chat_sessions_user_id_fkey(id, full_name, email)
+                user:users!user_id(id, full_name, email)
               `)
               .eq('id', session.id)
               .single();
@@ -60,7 +60,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
             if (sessionData) {
               const sessionWithUser = {
                 ...sessionData,
-                user: sessionData.users || null
+                user: sessionData.user || null
               } as ChatSession;
 
               setActiveSessions(prev => {
@@ -115,7 +115,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         .from('chat_sessions')
         .select(`
           *,
-          users!chat_sessions_user_id_fkey(id, full_name, email)
+          user:users!user_id(id, full_name, email)
         `)
         .eq('id', session.id)
         .single();
@@ -123,7 +123,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       if (sessionData) {
         const sessionWithUser = {
           ...sessionData,
-          user: sessionData.users || null
+          user: sessionData.user || null
         } as ChatSession;
 
         setActiveSessions(prev => [sessionWithUser, ...prev]);
@@ -174,7 +174,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         .from('chat_sessions')
         .select(`
           *,
-          users!chat_sessions_user_id_fkey(id, full_name, email)
+          user:users!user_id(id, full_name, email)
         `)
         .in('status', ['active', 'escalated'])
         .order('created_at', { ascending: false });
@@ -189,7 +189,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       // Transform the data to match our interface
       const sessionsWithUser = data?.map(session => ({
         ...session,
-        user: session.users || null
+        user: session.user || null
       })) || [];
       
       console.log('✅ Transformed sessions:', sessionsWithUser);
