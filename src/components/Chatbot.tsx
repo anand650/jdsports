@@ -57,8 +57,15 @@ export const Chatbot = () => {
                 console.log('⚠️ Message already exists, skipping:', newMessage.id);
                 return prev;
               }
-              console.log('✅ Adding new message from', newMessage.sender_type, 'to customer chat');
-              return [...prev, newMessage];
+              
+              // Only add agent and AI messages via real-time (user messages are added immediately)
+              if (newMessage.sender_type === 'agent' || newMessage.sender_type === 'ai') {
+                console.log('✅ Adding', newMessage.sender_type, 'message to customer chat');
+                return [...prev, newMessage];
+              }
+              
+              console.log('⚠️ Ignoring user message from real-time (already added optimistically)');
+              return prev;
             });
           }
         )
@@ -167,8 +174,21 @@ export const Chatbot = () => {
     setInput('');
     setIsLoading(true);
 
+    // Create user message for immediate UI update
+    const userMessage: ChatMessage = {
+      id: `temp_${Date.now()}`, // Temporary ID until DB insert
+      session_id: session.id,
+      sender_type: 'user',
+      content: messageContent,
+      metadata: { user_id: user?.id || null },
+      created_at: new Date().toISOString()
+    };
+
+    // Immediately show user message (optimistic update)
+    setMessages(prev => [...prev, userMessage]);
+
     try {
-      // Always save user message to database - real-time subscription will handle UI update
+      // Save to database
       const { data: insertedMessage, error } = await supabase.from('chat_messages').insert({
         session_id: session.id,
         sender_type: 'user',
@@ -178,9 +198,16 @@ export const Chatbot = () => {
 
       if (error) throw error;
 
+      // Update the message with real ID from database
+      setMessages(prev => prev.map(msg => 
+        msg.id === userMessage.id 
+          ? { ...msg, id: insertedMessage.id, created_at: insertedMessage.created_at }
+          : msg
+      ));
+
       // Only get AI response if not escalated to human
       if (!(session.status === 'escalated' && session.assigned_agent_id)) {
-        const userMessage: ChatMessage = {
+        const finalUserMessage: ChatMessage = {
           id: insertedMessage.id,
           session_id: session.id,
           sender_type: 'user',
@@ -188,7 +215,7 @@ export const Chatbot = () => {
           metadata: { user_id: user?.id || null },
           created_at: insertedMessage.created_at
         };
-        await simulateAIResponse(userMessage);
+        await simulateAIResponse(finalUserMessage);
       }
     } catch (error) {
       console.error('Error sending message:', error);
