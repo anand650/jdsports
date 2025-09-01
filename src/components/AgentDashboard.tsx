@@ -47,20 +47,27 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
           
           // Only handle sessions that are escalated or need agent attention
           if (session.status === 'escalated') {
-            // Fetch complete session with user details
+            // Fetch complete session with user details separately
             const { data: sessionData } = await supabase
               .from('chat_sessions')
-              .select(`
-                *,
-                users!chat_sessions_user_id_fkey(id, full_name, email)
-              `)
+              .select('*')
               .eq('id', session.id)
               .single();
 
             if (sessionData) {
+              let userData = null;
+              if (sessionData.user_id) {
+                const { data: userResult } = await supabase
+                  .from('users')
+                  .select('id, full_name, email')
+                  .eq('id', sessionData.user_id)
+                  .single();
+                userData = userResult;
+              }
+
               const sessionWithUser = {
                 ...sessionData,
-                user: sessionData.users || null
+                user: userData
               } as ChatSession;
 
               setActiveSessions(prev => {
@@ -113,17 +120,24 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
     const handleNewEscalatedSession = async (session: ChatSession) => {
       const { data: sessionData } = await supabase
         .from('chat_sessions')
-        .select(`
-          *,
-          users!chat_sessions_user_id_fkey(id, full_name, email)
-        `)
+        .select('*')
         .eq('id', session.id)
         .single();
 
       if (sessionData) {
+        let userData = null;
+        if (sessionData.user_id) {
+          const { data: userResult } = await supabase
+            .from('users')
+            .select('id, full_name, email')
+            .eq('id', sessionData.user_id)
+            .single();
+          userData = userResult;
+        }
+
         const sessionWithUser = {
           ...sessionData,
-          user: sessionData.users || null
+          user: userData
         } as ChatSession;
 
         setActiveSessions(prev => [sessionWithUser, ...prev]);
@@ -173,8 +187,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       const { data, error } = await supabase
         .from('chat_sessions')
         .select(`
-          *,
-          users!chat_sessions_user_id_fkey(id, full_name, email)
+          *
         `)
         .in('status', ['active', 'escalated'])
         .order('created_at', { ascending: false });
@@ -186,16 +199,34 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       
       console.log('📊 Raw sessions data:', data);
       
-      // Transform the data to match our interface
-      const sessionsWithUser = data?.map(session => ({
-        ...session,
-        user: session.users || null
-      })) || [];
+      // Fetch user details separately for sessions that have user_id
+      const sessionsWithUsers = await Promise.all(
+        (data || []).map(async (session) => {
+          if (session.user_id) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('id, full_name, email')
+              .eq('id', session.user_id)
+              .single();
+            
+            console.log(`User data for session ${session.id}:`, userData);
+            
+            return {
+              ...session,
+              user: userData || null
+            };
+          }
+          return {
+            ...session,
+            user: null
+          };
+        })
+      );
       
-      console.log('✅ Transformed sessions:', sessionsWithUser);
-      console.log('🔥 Escalated sessions:', sessionsWithUser.filter(s => s.status === 'escalated'));
+      console.log('✅ Transformed sessions:', sessionsWithUsers);
+      console.log('🔥 Escalated sessions:', sessionsWithUsers.filter(s => s.status === 'escalated'));
       
-      setActiveSessions(sessionsWithUser as ChatSession[]);
+      setActiveSessions(sessionsWithUsers as ChatSession[]);
     } catch (error) {
       console.error('Error fetching sessions:', error);
       toast({
@@ -277,7 +308,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
       if (error) throw error;
 
-      // Message will be added via real-time subscription
+      // Message will be added via real-time subscription - don't add manually
     } catch (error) {
       console.error('Error sending message:', error);
       toast({

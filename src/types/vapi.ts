@@ -3,12 +3,15 @@ export interface VAPICustomerData {
   email?: string;
   phone?: string;
   totalOrders: number;
+  totalSpent?: number;
+  loyaltyTier?: string;
   recentOrders: VAPIOrderSummary[];
   callHistory: number;
   lastInteraction?: string;
   preferredLanguage: string;
   customerNotes?: string;
   tags: string[];
+  communicationPreference?: string;
 }
 
 export interface VAPIOrderSummary {

@@ -80,7 +80,7 @@ export const ChatPanel = ({ session, messages, onSendMessage }: ChatPanelProps) 
               Chat Session {session.session_token.slice(-8)}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {session.user_id ? `User ${session.user_id.slice(0, 8)}` : 'Anonymous User'}
+              {session.user?.full_name || session.user?.email || 'Anonymous User'}
             </p>
           </div>
           <div className="flex items-center space-x-2">

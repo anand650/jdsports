@@ -65,43 +65,33 @@ export const AnalyticsDashboard = () => {
         .from('agents')
         .select('*', { count: 'exact' });
 
-      // Process analytics
-      const totalCalls = calls?.length || 0;
-      const completedCalls = calls?.filter(call => call.call_duration) || [];
-      const avgCallDuration = completedCalls.length > 0 
-        ? completedCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / completedCalls.length 
-        : 0;
+      // Process analytics - USING STATIC VALUES FOR DEMO
+      const totalCalls = 85; // Static for demo
+      const avgCallDuration = 247; // Static average duration in seconds
+      const resolutionRate = 78.5; // Static 78.5% resolution rate
+      const avgSatisfactionScore = 4.2; // Static 4.2/5 satisfaction score
 
-      const resolvedCalls = calls?.filter(call => call.resolution_status === 'resolved') || [];
-      const resolutionRate = totalCalls > 0 ? (resolvedCalls.length / totalCalls) * 100 : 0;
-
-      const satisfactionScores = calls?.filter(call => call.satisfaction_score) || [];
-      const avgSatisfactionScore = satisfactionScores.length > 0
-        ? satisfactionScores.reduce((sum, call) => sum + (call.satisfaction_score || 0), 0) / satisfactionScores.length
-        : 0;
-
-      // Call volume by hour
-      const callVolumeByHour = Array.from({ length: 24 }, (_, hour) => {
-        const hourCalls = calls?.filter(call => {
-          const callHour = new Date(call.created_at).getHours();
-          return callHour === hour;
-        }) || [];
-        return { hour: `${hour}:00`, count: hourCalls.length };
-      });
-
-      // Resolution breakdown
-      const resolutionBreakdown = [
-        { status: 'Resolved', count: calls?.filter(c => c.resolution_status === 'resolved').length || 0 },
-        { status: 'Unresolved', count: calls?.filter(c => c.resolution_status === 'unresolved').length || 0 },
-        { status: 'Escalated', count: calls?.filter(c => c.resolution_status === 'escalated').length || 0 },
-        { status: 'Pending', count: calls?.filter(c => c.resolution_status === 'pending').length || 0 },
+      // Static chart data for demo
+      const callVolumeByHour = [
+        { hour: '8:00', count: 12 }, { hour: '9:00', count: 19 }, { hour: '10:00', count: 15 },
+        { hour: '11:00', count: 22 }, { hour: '12:00', count: 8 }, { hour: '13:00', count: 16 },
+        { hour: '14:00', count: 25 }, { hour: '15:00', count: 18 }, { hour: '16:00', count: 14 },
+        { hour: '17:00', count: 11 }, { hour: '18:00', count: 7 }
       ];
 
-      // Satisfaction distribution
-      const satisfactionDistribution = Array.from({ length: 5 }, (_, i) => ({
-        score: i + 1,
-        count: calls?.filter(c => c.satisfaction_score === i + 1).length || 0
-      }));
+      // Static resolution breakdown for demo  
+      const resolutionBreakdown = [
+        { status: 'Resolved', count: 67 },
+        { status: 'Unresolved', count: 8 },
+        { status: 'Escalated', count: 6 },
+        { status: 'Pending', count: 4 },
+      ];
+
+      // Static satisfaction distribution for demo
+      const satisfactionDistribution = [
+        { score: 1, count: 3 }, { score: 2, count: 8 }, { score: 3, count: 15 },
+        { score: 4, count: 28 }, { score: 5, count: 31 }
+      ];
 
       setAnalytics({
         totalCalls,
@@ -317,13 +307,6 @@ export const AnalyticsDashboard = () => {
                 {analytics.avgSatisfactionScore.toFixed(1)}/5
               </Badge>
             </div>
-            <Button 
-              onClick={() => window.open('/reports', '_blank')} 
-              variant="outline" 
-              className="w-full"
-            >
-              View Detailed Reports
-            </Button>
           </CardContent>
         </Card>
       </div>

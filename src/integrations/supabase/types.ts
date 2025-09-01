@@ -283,45 +283,96 @@ export type Database = {
       customer_profiles: {
         Row: {
           call_history_count: number | null
+          communication_preference: string | null
           created_at: string
           customer_notes: string | null
           email: string | null
           id: string
           last_interaction_at: string | null
+          loyalty_tier: string | null
           name: string | null
           phone_number: string
           preferred_language: string | null
           tags: string[] | null
           timezone: string | null
+          total_orders: number | null
+          total_spent: number | null
           updated_at: string
         }
         Insert: {
           call_history_count?: number | null
+          communication_preference?: string | null
           created_at?: string
           customer_notes?: string | null
           email?: string | null
           id?: string
           last_interaction_at?: string | null
+          loyalty_tier?: string | null
           name?: string | null
           phone_number: string
           preferred_language?: string | null
           tags?: string[] | null
           timezone?: string | null
+          total_orders?: number | null
+          total_spent?: number | null
           updated_at?: string
         }
         Update: {
           call_history_count?: number | null
+          communication_preference?: string | null
           created_at?: string
           customer_notes?: string | null
           email?: string | null
           id?: string
           last_interaction_at?: string | null
+          loyalty_tier?: string | null
           name?: string | null
           phone_number?: string
           preferred_language?: string | null
           tags?: string[] | null
           timezone?: string | null
+          total_orders?: number | null
+          total_spent?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      interaction_history: {
+        Row: {
+          agent_id: string | null
+          created_at: string | null
+          customer_phone: string
+          duration_seconds: number | null
+          id: string
+          interaction_type: string
+          resolution_status: string | null
+          satisfaction_rating: number | null
+          topic: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string | null
+          customer_phone: string
+          duration_seconds?: number | null
+          id?: string
+          interaction_type: string
+          resolution_status?: string | null
+          satisfaction_rating?: number | null
+          topic?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string | null
+          customer_phone?: string
+          duration_seconds?: number | null
+          id?: string
+          interaction_type?: string
+          resolution_status?: string | null
+          satisfaction_rating?: number | null
+          topic?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -334,8 +385,10 @@ export type Database = {
           id: string
           is_active: boolean | null
           metadata: Json | null
+          quick_response: string | null
           title: string
           updated_at: string
+          voice_optimized: boolean | null
         }
         Insert: {
           category?: string
@@ -345,8 +398,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           metadata?: Json | null
+          quick_response?: string | null
           title: string
           updated_at?: string
+          voice_optimized?: boolean | null
         }
         Update: {
           category?: string
@@ -356,8 +411,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           metadata?: Json | null
+          quick_response?: string | null
           title?: string
           updated_at?: string
+          voice_optimized?: boolean | null
         }
         Relationships: []
       }
@@ -413,6 +470,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          order_number: string | null
           shipping_address: Json
           status: string
           total_amount: number
@@ -422,6 +480,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          order_number?: string | null
           shipping_address: Json
           status?: string
           total_amount: number
@@ -431,6 +490,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          order_number?: string | null
           shipping_address?: Json
           status?: string
           total_amount?: number
@@ -597,6 +657,14 @@ export type Database = {
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
+      }
+      generate_order_number: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       halfvec_avg: {
         Args: { "": number[] }

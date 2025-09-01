@@ -67,11 +67,13 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
     setLoading(true);
     try {
       // Find user account by phone number
-      const { data: user } = await supabase
+      const { data: userData } = await supabase
         .from('users')
         .select('*')
         .eq('phone_number', profile.phone_number)
-        .maybeSingle();
+        .limit(1);
+
+      const user = userData?.[0] || null;
 
       let orders = [];
       let totalSpent = 0;
@@ -237,7 +239,7 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">
-                      {customerData.profile?.name || 'Unknown Customer'}
+                      {customerData.user?.full_name || customerData.profile?.name || 'Unknown Customer'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {customerData.profile?.phone_number}

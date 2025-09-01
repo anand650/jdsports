@@ -25,6 +25,7 @@ export const Auth = () => {
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpFullName, setSignUpFullName] = useState('');
+  const [signUpPhoneNumber, setSignUpPhoneNumber] = useState('');
   
   const { signIn, signUp, signOut, user, userProfile } = useAuth();
   const { toast } = useToast();
@@ -108,7 +109,7 @@ export const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName, role);
+      const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName, role, signUpPhoneNumber);
       
       if (error) {
         // Handle specific signup errors
@@ -236,6 +237,17 @@ export const Auth = () => {
                     placeholder="Enter your full name"
                     value={signUpFullName}
                     onChange={(e) => setSignUpFullName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-phone">Phone Number</Label>
+                  <Input
+                    id="signup-phone"
+                    type="tel"
+                    placeholder="Enter your phone number"
+                    value={signUpPhoneNumber}
+                    onChange={(e) => setSignUpPhoneNumber(e.target.value)}
                     required
                   />
                 </div>
