@@ -108,6 +108,17 @@ export const Chatbot = () => {
                 description: "A customer service representative is now handling your chat",
               });
             }
+
+            // If agent handed chat back to AI (session reverted to active without agent)
+            if (!updatedSession.assigned_agent_id && updatedSession.status === 'active' && 
+                session.assigned_agent_id && session.status === 'escalated') {
+              setNeedsEscalation(false);
+              
+              toast({
+                title: "Back to AI Assistant",
+                description: "The human agent has completed their assistance. I'm here to continue helping you!",
+              });
+            }
           }
         )
         .subscribe();

@@ -362,12 +362,33 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   const handleCloseSession = async (session: ChatSession) => {
     try {
+      // Revert session back to AI handling instead of closing it
       const { error } = await supabase
         .from('chat_sessions')
-        .update({ status: 'closed' })
+        .update({ 
+          status: 'active',
+          assigned_agent_id: null,
+          escalated_at: null
+        })
         .eq('id', session.id);
 
       if (error) throw error;
+
+      // Send a message to inform the customer about the handover back to AI
+      const handoverMessage = {
+        session_id: session.id,
+        sender_type: 'ai',
+        content: "The human agent has completed their assistance and handed your chat back to me, your AI assistant. I'm here to continue helping you with any questions you may have!",
+        metadata: { is_agent_handover: true }
+      };
+
+      const { error: messageError } = await supabase
+        .from('chat_messages')
+        .insert(handoverMessage);
+
+      if (messageError) {
+        console.error('Error sending handover message:', messageError);
+      }
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));
       if (selectedSession?.id === session.id) {
@@ -376,14 +397,14 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       }
 
       toast({
-        title: "Session Closed",
-        description: "Chat session has been ended",
+        title: "Session Handed Back to AI",
+        description: "Chat has been returned to AI assistant",
       });
     } catch (error) {
-      console.error('Error closing session:', error);
+      console.error('Error handing session back to AI:', error);
       toast({
         title: "Error",
-        description: "Failed to close session",
+        description: "Failed to hand session back to AI",
         variant: "destructive",
       });
     }
