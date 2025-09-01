@@ -35,9 +35,9 @@ export const Chatbot = () => {
     if (session) {
       console.log('🔄 Setting up real-time subscription for session:', session.id);
       
-      // Subscribe to real-time messages for this session using unified channel
+      // Subscribe to real-time messages for this session
       const messagesChannel = supabase
-        .channel(`chat_session_${session.id}`)
+        .channel(`customer_messages_${session.id}`) // Use different channel name to avoid conflicts
         .on(
           'postgres_changes',
           {
@@ -61,9 +61,7 @@ export const Chatbot = () => {
                 }
                 
                 console.log('✅ Customer: Adding', newMessage.sender_type, 'message to chat');
-                return [...prev, newMessage].sort((a, b) => 
-                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                );
+                return [...prev, newMessage];
               });
             } else {
               console.log('⚠️ Customer: Ignoring user message from real-time (already added optimistically)');
@@ -74,7 +72,7 @@ export const Chatbot = () => {
 
       // Subscribe to session updates to detect human agent takeover
       const sessionChannel = supabase
-        .channel(`chat_session_updates_${session.id}`)
+        .channel('chat_session_updates')
         .on(
           'postgres_changes',
           {
@@ -98,9 +96,7 @@ export const Chatbot = () => {
                 metadata: { is_agent_takeover: true },
                 created_at: new Date().toISOString()
               };
-              setMessages(prev => [...prev, agentTakeoverMessage].sort((a, b) => 
-                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-              ));
+              setMessages(prev => [...prev, agentTakeoverMessage]);
               
               toast({
                 title: "Human Agent Connected",
