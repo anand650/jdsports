@@ -21,6 +21,10 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
+    console.log('=== VAPI Customer Lookup Request ===');
+    console.log('Full request body:', JSON.stringify(body, null, 2));
+    console.log('Request headers:', JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
+    
     const { message = {} } = body;
     
     // Enhanced parameter extraction with multiple fallback paths
@@ -42,7 +46,11 @@ serve(async (req) => {
                    message?.orderId ||
                    body.orderId;
     
-    console.log('VAPI Customer Lookup:', { phoneNumber, email, orderId, rawMessage: message });
+    console.log('=== Extracted Parameters ===');
+    console.log('Phone Number:', phoneNumber);
+    console.log('Email:', email);
+    console.log('Order ID:', orderId);
+    console.log('Raw Message:', JSON.stringify(message, null, 2));
 
     let customerData = null;
     let searchMethod = null;
@@ -92,6 +100,11 @@ serve(async (req) => {
       parameters: { phoneNumber, email, orderId },
       message: generateCustomerResponseMessage(customerData, { phoneNumber, email, orderId }, searchAttempted)
     };
+
+    console.log('=== Final Response ===');
+    console.log('Customer Data Found:', !!customerData);
+    console.log('Search Method:', searchMethod);  
+    console.log('Response:', JSON.stringify(response, null, 2));
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
