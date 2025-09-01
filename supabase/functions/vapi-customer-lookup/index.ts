@@ -19,6 +19,42 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Handle GET requests for testing
+  if (req.method === 'GET') {
+    const url = new URL(req.url);
+    const phoneNumber = url.searchParams.get('phoneNumber');
+    
+    if (phoneNumber) {
+      console.log('=== GET Request Test ===');
+      console.log('Phone Number from URL:', phoneNumber);
+      
+      try {
+        const customerData = await lookupByPhone(phoneNumber);
+        const response = {
+          result: customerData ? formatCustomerData(customerData) : null,
+          searchMethod: 'phone',
+          searchAttempted: true,
+          parameters: { phoneNumber },
+          message: generateCustomerResponseMessage(customerData, { phoneNumber }, true)
+        };
+        
+        return new Response(JSON.stringify(response), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('GET request error:', error);
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    
+    return new Response('GET request - provide phoneNumber as query parameter', {
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+    });
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     console.log('=== VAPI Customer Lookup Request ===');
