@@ -170,39 +170,70 @@ serve(async (req) => {
   }
 });
 
+function normalizePhoneNumber(phone: string): string[] {
+  if (!phone || typeof phone !== 'string') return [];
+  
+  const cleaned = phone.trim();
+  const variants = [cleaned];
+  
+  // If phone starts with +, also try without +
+  if (cleaned.startsWith('+')) {
+    variants.push(cleaned.substring(1));
+  } else {
+    // If phone doesn't start with +, also try with +
+    variants.push('+' + cleaned);
+  }
+  
+  return variants;
+}
+
 async function lookupByPhone(phoneNumber: string) {
   console.log('Looking up by phone:', phoneNumber);
   
-  // Try customer_profiles first (call center data)
-  const { data: profileData, error: profileError } = await supabase
-    .from('customer_profiles')
-    .select('*')
-    .eq('phone_number', phoneNumber)
-    .maybeSingle();
+  const phoneVariants = normalizePhoneNumber(phoneNumber);
+  console.log('Phone variants to try:', phoneVariants);
   
-  if (profileError) {
-    console.error('Error looking up customer profile:', profileError);
-  }
-  
-  if (profileData) {
-    // Get associated user data if exists
+  for (const variant of phoneVariants) {
+    console.log('Trying phone variant:', variant);
+    
+    // Try customer_profiles first (call center data)
+    const { data: profileData, error: profileError } = await supabase
+      .from('customer_profiles')
+      .select('*')
+      .eq('phone_number', variant)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error('Error looking up customer profile:', profileError);
+    }
+    
+    if (profileData) {
+      console.log('Found customer profile with variant:', variant);
+      // Get associated user data if exists
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone_number', variant)
+        .maybeSingle();
+      
+      return { ...profileData, userData };
+    }
+
+    // Try users table
     const { data: userData } = await supabase
       .from('users')
       .select('*')
-      .eq('phone_number', phoneNumber)
+      .eq('phone_number', variant)
       .maybeSingle();
-    
-    return { ...profileData, userData };
+      
+    if (userData) {
+      console.log('Found user data with variant:', variant);
+      return userData;
+    }
   }
-
-  // Try users table
-  const { data: userData } = await supabase
-    .from('users')
-    .select('*')
-    .eq('phone_number', phoneNumber)
-    .maybeSingle();
-    
-  return userData;
+  
+  console.log('No customer found with any phone variant');
+  return null;
 }
 
 async function lookupByEmail(email: string) {
