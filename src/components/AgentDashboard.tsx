@@ -171,9 +171,19 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
             setMessages(prev => {
               // Check for duplicates
               const exists = prev.find(msg => msg.id === message.id);
-              if (exists) return prev;
-              console.log('✅ Adding message to agent view:', message.sender_type);
-              return [...prev, message];
+              if (exists) {
+                console.log('⚠️ Message already exists in agent view, skipping:', message.id);
+                return prev;
+              }
+              
+              // Only add user and AI messages via real-time (agent messages are added optimistically)
+              if (message.sender_type === 'user' || message.sender_type === 'ai') {
+                console.log('✅ Adding', message.sender_type, 'message to agent view');
+                return [...prev, message];
+              }
+              
+              console.log('⚠️ Ignoring agent message from real-time (should be added optimistically)');
+              return prev;
             });
           }
         )
@@ -299,25 +309,47 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
   const handleSendMessage = async (content: string) => {
     if (!selectedSession || !user) return;
 
-    const message = {
+    const tempMessage: ChatMessage = {
+      id: `temp_agent_${Date.now()}`,
       session_id: selectedSession.id,
-      sender_type: 'agent' as const,
+      sender_type: 'agent',
       sender_id: user.id,
       content,
       metadata: {},
       created_at: new Date().toISOString()
     };
 
+    // Add message optimistically to agent view
+    setMessages(prev => [...prev, tempMessage]);
+
     try {
-      const { error } = await supabase
+      const { data: insertedMessage, error } = await supabase
         .from('chat_messages')
-        .insert(message);
+        .insert({
+          session_id: selectedSession.id,
+          sender_type: 'agent',
+          sender_id: user.id,
+          content,
+          metadata: {}
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Message will be added via real-time subscription - don't add manually
+      // Update the temporary message with real ID from database
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempMessage.id 
+          ? { ...msg, id: insertedMessage.id, created_at: insertedMessage.created_at }
+          : msg
+      ));
+
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      // Remove the failed message
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+      
       toast({
         title: "Error",
         description: "Failed to send message",
