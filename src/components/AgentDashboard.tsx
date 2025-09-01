@@ -156,7 +156,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
     let messagesChannel: any = null;
     if (selectedSession) {
       messagesChannel = supabase
-        .channel('chat_messages_agent')
+        .channel(`messages_session_${selectedSession.id}`)
         .on(
           'postgres_changes',
           {
@@ -167,7 +167,14 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
           },
           (payload) => {
             const message = payload.new as ChatMessage;
-            setMessages(prev => [...prev, message]);
+            console.log('📨 Agent received new message via real-time:', message);
+            setMessages(prev => {
+              // Check for duplicates
+              const exists = prev.find(msg => msg.id === message.id);
+              if (exists) return prev;
+              console.log('✅ Adding message to agent view:', message.sender_type);
+              return [...prev, message];
+            });
           }
         )
         .subscribe();

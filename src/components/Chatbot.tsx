@@ -35,9 +35,9 @@ export const Chatbot = () => {
     if (session) {
       console.log('🔄 Setting up real-time subscription for session:', session.id);
       
-      // Subscribe to real-time messages to avoid duplicates
+      // Subscribe to real-time messages for this session
       const messagesChannel = supabase
-        .channel(`chat_messages_${session.id}`)
+        .channel(`messages_session_${session.id}`)
         .on(
           'postgres_changes',
           {
@@ -50,14 +50,14 @@ export const Chatbot = () => {
             console.log('📨 New message received via real-time:', payload.new);
             const newMessage = payload.new as ChatMessage;
             
-            // Only add if the message doesn't already exist (prevent duplicates)
             setMessages(prev => {
+              // Check if message already exists to prevent duplicates
               const exists = prev.find(msg => msg.id === newMessage.id);
               if (exists) {
                 console.log('⚠️ Message already exists, skipping:', newMessage.id);
                 return prev;
               }
-              console.log('✅ Adding new message from', newMessage.sender_type);
+              console.log('✅ Adding new message from', newMessage.sender_type, 'to customer chat');
               return [...prev, newMessage];
             });
           }
@@ -163,30 +163,31 @@ export const Chatbot = () => {
       });
     }
 
-    const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      session_id: session.id,
-      sender_type: 'user',
-      content: input.trim(),
-      metadata: {},
-      created_at: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const messageContent = input.trim();
     setInput('');
     setIsLoading(true);
 
     try {
-      // Always save user message to database
-      await supabase.from('chat_messages').insert({
+      // Always save user message to database - real-time subscription will handle UI update
+      const { data: insertedMessage, error } = await supabase.from('chat_messages').insert({
         session_id: session.id,
         sender_type: 'user',
-        content: input.trim(),
+        content: messageContent,
         metadata: { user_id: user?.id || null }
-      });
+      }).select().single();
+
+      if (error) throw error;
 
       // Only get AI response if not escalated to human
       if (!(session.status === 'escalated' && session.assigned_agent_id)) {
+        const userMessage: ChatMessage = {
+          id: insertedMessage.id,
+          session_id: session.id,
+          sender_type: 'user',
+          content: messageContent,
+          metadata: { user_id: user?.id || null },
+          created_at: insertedMessage.created_at
+        };
         await simulateAIResponse(userMessage);
       }
     } catch (error) {
