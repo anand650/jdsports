@@ -63,44 +63,10 @@ serve(async (req) => {
     
     const { message = {} } = body;
     
-    // Extract parameters from VAPI function call arguments
-    const toolCall = message?.toolCalls?.[0] || message?.tool_calls?.[0];
-    const functionArgs = toolCall?.function?.arguments || body.arguments || {};
-    
-    console.log('Tool call data:', JSON.stringify(toolCall, null, 2));
-    console.log('Function arguments:', JSON.stringify(functionArgs, null, 2));
-    
-    // Enhanced parameter extraction with VAPI function arguments priority
-    const phoneNumber = functionArgs?.phoneNumber || 
-                       functionArgs?.phone || 
-                       functionArgs?.phone_number ||
-                       message?.call?.customer?.number || 
-                       message?.call?.from || 
-                       message?.phoneNumber || 
-                       message?.phone || 
-                       message?.parameters?.phone ||
-                       message?.parameters?.phoneNumber ||
-                       body.phoneNumber ||
-                       body.phone ||
-                       body.parameters?.phoneNumber ||
-                       body.parameters?.phone;
-                       
-    const email = functionArgs?.email ||
-                 functionArgs?.emailAddress ||
-                 message?.parameters?.email || 
-                 message?.email || 
-                 message?.customer?.email ||
-                 body.email ||
-                 body.parameters?.email;
-                 
-    const orderId = functionArgs?.orderId ||
-                   functionArgs?.order_id ||
-                   functionArgs?.orderNumber ||
-                   message?.parameters?.orderId || 
-                   message?.parameters?.order_id || 
-                   message?.orderId ||
-                   body.orderId ||
-                   body.parameters?.orderId;
+    // VAPI sends function arguments directly in request body
+    const phoneNumber = body.phoneNumber || body.phone || body.phone_number;
+    const email = body.email || body.emailAddress;
+    const orderId = body.orderId || body.order_id || body.orderNumber;
     
     console.log('=== Extracted Parameters ===');
     console.log('Phone Number:', phoneNumber);
