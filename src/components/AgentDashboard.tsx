@@ -208,7 +208,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         .select(`
           *
         `)
-        .in('status', ['active', 'escalated'])
+        .in('status', ['escalated'])
         .order('created_at', { ascending: false });
 
       if (error) {

@@ -88,7 +88,8 @@ export const Chatbot = () => {
             setSession(updatedSession);
             
             // If human agent took over, notify user and disable escalation
-            if (updatedSession.assigned_agent_id && updatedSession.status === 'escalated') {
+            if (updatedSession.assigned_agent_id && updatedSession.status === 'escalated' && 
+                !session.assigned_agent_id) {
               setNeedsEscalation(false);
               const agentTakeoverMessage: ChatMessage = {
                 id: `agent_takeover_${Date.now()}`,
@@ -124,7 +125,36 @@ export const Chatbot = () => {
 
   const initializeSession = async () => {
     try {
-      // Create session with user context if available
+      // First, check if user has any active sessions
+      if (user?.id) {
+        const { data: existingSession } = await supabase
+          .from('chat_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ['active', 'escalated'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (existingSession) {
+          console.log('🔄 Resuming existing session:', existingSession.id);
+          setSession(existingSession as ChatSession);
+          
+          // Load existing messages
+          const { data: existingMessages } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('session_id', existingSession.id)
+            .order('created_at', { ascending: true });
+
+          if (existingMessages && existingMessages.length > 0) {
+            setMessages(existingMessages as ChatMessage[]);
+            return; // Don't add welcome message if messages exist
+          }
+        }
+      }
+
+      // Create new session only if no active session exists
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({
@@ -263,22 +293,8 @@ export const Chatbot = () => {
       setNeedsEscalation(response.needsEscalation);
       setContextUsed(response.contextUsed);
       
-      // The AI response will be handled by real-time subscription
-      // Just add it locally with immediate UI update to prevent delay
-      const aiMessage: ChatMessage = {
-        id: `ai_${Date.now()}`,
-        session_id: session!.id,
-        sender_type: 'ai',
-        content: response.message,
-        metadata: { 
-          escalation_suggested: response.needsEscalation,
-          from_rag: true,
-          context_used: response.contextUsed
-        },
-        created_at: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
+      // AI response will come through real-time subscription
+      // Don't add it locally to prevent duplicates
       
     } catch (error) {
       console.error('Error getting AI response:', error);
