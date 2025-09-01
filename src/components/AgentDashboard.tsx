@@ -152,11 +152,11 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       }
     };
 
-    // Subscribe to messages for selected session using unified channel
+    // Subscribe to messages for selected session
     let messagesChannel: any = null;
     if (selectedSession) {
       messagesChannel = supabase
-        .channel(`chat_session_${selectedSession.id}`)
+        .channel(`agent_messages_${selectedSession.id}`) // Use different channel name to avoid conflicts
         .on(
           'postgres_changes',
           {
@@ -180,9 +180,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
                 }
                 
                 console.log('✅ Adding', message.sender_type, 'message to agent view');
-                return [...prev, message].sort((a, b) => 
-                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                );
+                return [...prev, message];
               });
             } else {
               console.log('⚠️ Ignoring agent message from real-time (already added optimistically)');
