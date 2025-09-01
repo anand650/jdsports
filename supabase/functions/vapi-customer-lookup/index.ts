@@ -63,24 +63,36 @@ serve(async (req) => {
     
     const { message = {} } = body;
     
-    // Enhanced parameter extraction with multiple fallback paths
+    // Enhanced parameter extraction with multiple fallback paths for VAPI
     const phoneNumber = message?.call?.customer?.number || 
                        message?.call?.from || 
                        message?.phoneNumber || 
                        message?.phone || 
                        message?.parameters?.phone ||
+                       message?.parameters?.phoneNumber ||
                        body.phoneNumber ||
-                       body.phone;
+                       body.phone ||
+                       body.parameters?.phoneNumber ||
+                       body.parameters?.phone ||
+                       // Direct function arguments from VAPI tool calls
+                       body.function?.arguments?.phoneNumber ||
+                       body.function?.arguments?.phone ||
+                       // Check if it's directly in the root
+                       body.phoneNumber;
                        
     const email = message?.parameters?.email || 
                  message?.email || 
                  message?.customer?.email ||
-                 body.email;
+                 body.email ||
+                 body.parameters?.email ||
+                 body.function?.arguments?.email;
                  
     const orderId = message?.parameters?.orderId || 
                    message?.parameters?.order_id || 
                    message?.orderId ||
-                   body.orderId;
+                   body.orderId ||
+                   body.parameters?.orderId ||
+                   body.function?.arguments?.orderId;
     
     console.log('=== Extracted Parameters ===');
     console.log('Phone Number:', phoneNumber);
