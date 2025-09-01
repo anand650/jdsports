@@ -33,9 +33,11 @@ export const Chatbot = () => {
 
   useEffect(() => {
     if (session) {
+      console.log('🔄 Setting up real-time subscription for session:', session.id);
+      
       // Subscribe to real-time messages to avoid duplicates
       const messagesChannel = supabase
-        .channel('chat_messages')
+        .channel(`chat_messages_${session.id}`)
         .on(
           'postgres_changes',
           {
@@ -45,12 +47,17 @@ export const Chatbot = () => {
             filter: `session_id=eq.${session.id}`
           },
           (payload) => {
+            console.log('📨 New message received via real-time:', payload.new);
             const newMessage = payload.new as ChatMessage;
+            
             // Only add if the message doesn't already exist (prevent duplicates)
             setMessages(prev => {
-              const exists = prev.find(msg => msg.id === newMessage.id || 
-                (msg.content === newMessage.content && msg.sender_type === newMessage.sender_type));
-              if (exists) return prev;
+              const exists = prev.find(msg => msg.id === newMessage.id);
+              if (exists) {
+                console.log('⚠️ Message already exists, skipping:', newMessage.id);
+                return prev;
+              }
+              console.log('✅ Adding new message from', newMessage.sender_type);
               return [...prev, newMessage];
             });
           }
