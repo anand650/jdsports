@@ -37,7 +37,7 @@ export const Chatbot = () => {
       
       // Subscribe to real-time messages for this session
       const messagesChannel = supabase
-        .channel(`messages_session_${session.id}`)
+        .channel(`customer_messages_${session.id}`) // Use different channel name to avoid conflicts
         .on(
           'postgres_changes',
           {
@@ -47,26 +47,25 @@ export const Chatbot = () => {
             filter: `session_id=eq.${session.id}`
           },
           (payload) => {
-            console.log('📨 New message received via real-time:', payload.new);
+            console.log('📨 Customer received new message via real-time:', payload.new);
             const newMessage = payload.new as ChatMessage;
             
-            setMessages(prev => {
-              // Check if message already exists to prevent duplicates
-              const exists = prev.find(msg => msg.id === newMessage.id);
-              if (exists) {
-                console.log('⚠️ Message already exists, skipping:', newMessage.id);
-                return prev;
-              }
-              
-              // Only add agent and AI messages via real-time (user messages are added immediately)
-              if (newMessage.sender_type === 'agent' || newMessage.sender_type === 'ai') {
-                console.log('✅ Adding', newMessage.sender_type, 'message to customer chat');
+            // Only add agent and AI messages via real-time (user messages are added optimistically)
+            if (newMessage.sender_type === 'agent' || newMessage.sender_type === 'ai') {
+              setMessages(prev => {
+                // Check if message already exists to prevent duplicates
+                const exists = prev.find(msg => msg.id === newMessage.id);
+                if (exists) {
+                  console.log('⚠️ Customer: Message already exists, skipping:', newMessage.id);
+                  return prev;
+                }
+                
+                console.log('✅ Customer: Adding', newMessage.sender_type, 'message to chat');
                 return [...prev, newMessage];
-              }
-              
-              console.log('⚠️ Ignoring user message from real-time (already added optimistically)');
-              return prev;
-            });
+              });
+            } else {
+              console.log('⚠️ Customer: Ignoring user message from real-time (already added optimistically)');
+            }
           }
         )
         .subscribe();

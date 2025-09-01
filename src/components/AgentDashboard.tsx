@@ -29,7 +29,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
     if (selectedSession) {
       fetchMessages(selectedSession.id);
     }
-  }, [selectedSession]);
+  }, [selectedSession?.id]); // Only depend on session ID to prevent unnecessary refetches
 
   useEffect(() => {
     // Subscribe to new chat sessions - listen for both escalated sessions and newly created ones
@@ -156,7 +156,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
     let messagesChannel: any = null;
     if (selectedSession) {
       messagesChannel = supabase
-        .channel(`messages_session_${selectedSession.id}`)
+        .channel(`agent_messages_${selectedSession.id}`) // Use different channel name to avoid conflicts
         .on(
           'postgres_changes',
           {
@@ -168,23 +168,23 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
           (payload) => {
             const message = payload.new as ChatMessage;
             console.log('📨 Agent received new message via real-time:', message);
-            setMessages(prev => {
-              // Check for duplicates
-              const exists = prev.find(msg => msg.id === message.id);
-              if (exists) {
-                console.log('⚠️ Message already exists in agent view, skipping:', message.id);
-                return prev;
-              }
-              
-              // Only add user and AI messages via real-time (agent messages are added optimistically)
-              if (message.sender_type === 'user' || message.sender_type === 'ai') {
+            
+            // Only add user and AI messages via real-time (agent messages are added optimistically)
+            if (message.sender_type === 'user' || message.sender_type === 'ai') {
+              setMessages(prev => {
+                // Check for duplicates
+                const exists = prev.find(msg => msg.id === message.id);
+                if (exists) {
+                  console.log('⚠️ Message already exists in agent view, skipping:', message.id);
+                  return prev;
+                }
+                
                 console.log('✅ Adding', message.sender_type, 'message to agent view');
                 return [...prev, message];
-              }
-              
-              console.log('⚠️ Ignoring agent message from real-time (should be added optimistically)');
-              return prev;
-            });
+              });
+            } else {
+              console.log('⚠️ Ignoring agent message from real-time (already added optimistically)');
+            }
           }
         )
         .subscribe();
