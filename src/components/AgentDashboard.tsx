@@ -362,6 +362,9 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   const handleCloseSession = async (session: ChatSession) => {
     try {
+      console.log('🔄 Starting session handover process for session:', session.id);
+      console.log('🔄 Current user:', user?.id, 'Role:', user);
+      
       // First, send a message to inform the customer about the handover back to AI
       // (while the agent is still assigned to the session)
       const handoverMessage = {
@@ -372,16 +375,19 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         metadata: { is_agent_handover: true }
       };
 
+      console.log('📝 Attempting to insert handover message...');
       const { error: messageError } = await supabase
         .from('chat_messages')
         .insert(handoverMessage);
 
       if (messageError) {
-        console.error('Error sending handover message:', messageError);
+        console.error('❌ Error sending handover message:', messageError);
         throw messageError;
       }
+      console.log('✅ Handover message sent successfully');
 
       // Then revert session back to AI handling
+      console.log('🔄 Attempting to update session...');
       const { error } = await supabase
         .from('chat_sessions')
         .update({ 
@@ -391,7 +397,11 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         })
         .eq('id', session.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error updating session:', error);
+        throw error;
+      }
+      console.log('✅ Session updated successfully');
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));
       if (selectedSession?.id === session.id) {
@@ -404,7 +414,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         description: "Chat has been returned to AI assistant",
       });
     } catch (error) {
-      console.error('Error handing session back to AI:', error);
+      console.error('❌ Error handing session back to AI:', error);
       toast({
         title: "Error",
         description: "Failed to hand session back to AI",
