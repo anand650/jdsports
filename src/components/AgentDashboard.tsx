@@ -403,16 +403,13 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       console.log('- Session assigned_agent_id:', session.assigned_agent_id);
       console.log('- Session status:', session.status);
 
-      // Then revert session back to AI handling - single atomic update
-      console.log('🔄 Attempting to update session with atomic operation...');
-      const { error: sessionUpdateError } = await supabase
-        .from('chat_sessions')
-        .update({ 
-          status: 'active',
-          assigned_agent_id: null,
-          escalated_at: null
-        })
-        .eq('id', session.id);
+      // Use the secure service function to handle session handover
+      console.log('🔄 Attempting to hand over session using service function...');
+      const { data: handoverResult, error: sessionUpdateError } = await supabase
+        .rpc('handover_session_to_ai', {
+          session_id_param: session.id,
+          agent_id_param: user?.id
+        });
 
       if (sessionUpdateError) {
         console.error('❌ Session update error:', sessionUpdateError);
@@ -424,7 +421,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         });
         throw sessionUpdateError;
       }
-      console.log('✅ Session updated successfully (atomic operation)');
+      console.log('✅ Session handed over to AI successfully:', handoverResult);
 
       // After successful handover, trigger AI welcome back message
       console.log('🤖 Triggering AI welcome back response...');
