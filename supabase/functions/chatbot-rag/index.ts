@@ -55,6 +55,7 @@ serve(async (req) => {
     }
 
     // Check if session is escalated or assigned to a human agent
+    // Skip this check if it's a handover response from an agent
     const { data: sessionData, error: sessionError } = await supabase
       .from('chat_sessions')
       .select('status, assigned_agent_id')
@@ -66,8 +67,15 @@ serve(async (req) => {
       throw new Error('Failed to verify session status');
     }
 
-    // If session is escalated or assigned to human agent, don't process AI response
-    if (sessionData.status === 'escalated' || sessionData.status === 'closed' || sessionData.assigned_agent_id) {
+    console.log('Session status check:', {
+      sessionId,
+      status: sessionData.status,
+      assigned_agent_id: sessionData.assigned_agent_id,
+      isHandoverResponse
+    });
+
+    // If session is escalated or assigned to human agent AND it's not a handover response, don't process AI response
+    if (!isHandoverResponse && (sessionData.status === 'escalated' || sessionData.status === 'closed' || sessionData.assigned_agent_id)) {
       console.log('Session is handled by human agent, skipping AI response');
       
       // Save user message to database but don't generate AI response
