@@ -64,24 +64,38 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           table: 'calls',
         },
         (payload) => {
+          console.log('📞 Call history change: UPDATE');
           console.log('📞 Call updated:', payload.new);
           const updatedCall = payload.new as Call;
           
           // Update active call if it matches
           if (activeCall && updatedCall.id === activeCall.id) {
+            console.log('🔄 Updating activeCall state with:', updatedCall);
             setActiveCall(updatedCall);
           }
           
           // Handle incoming call status changes
           if (incomingCall && updatedCall.id === incomingCall.id) {
+            console.log('🔄 Processing incoming call update:', updatedCall.call_status);
             // Only hide incoming call if it's completed, failed, or has been assigned to an agent
             if (updatedCall.call_status === 'completed' || 
                 updatedCall.call_status === 'failed' ||
                 (updatedCall.agent_id && updatedCall.agent_id !== null)) {
+              console.log('🔄 Hiding incoming call notification');
               setIncomingCall(null);
             } else {
+              console.log('🔄 Updating incoming call state');
               setIncomingCall(updatedCall);
             }
+          }
+          
+          // If this is a call that just got answered (status changed to in-progress), set as active
+          if (updatedCall.call_status === 'in-progress' && 
+              updatedCall.agent_id && 
+              !activeCall) {
+            console.log('🎯 Setting newly answered call as active:', updatedCall.id);
+            setActiveCall(updatedCall);
+            setIncomingCall(null);
           }
         }
       )
@@ -134,8 +148,15 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       setIncomingCall(null);
       
       // Set active call with updated data  
-      console.log('🎯 Setting activeCall state...');
+      console.log('🎯 Setting activeCall state to:', updatedCall);
+      console.log('🎯 Call status in updated data:', updatedCall.call_status);
+      console.log('🎯 Agent ID in updated data:', updatedCall.agent_id);
       setActiveCall(updatedCall as Call);
+      
+      // Force a small delay to ensure state is updated
+      setTimeout(() => {
+        console.log('🔍 Current activeCall after delay:', activeCall?.id, activeCall?.call_status);
+      }, 100);
       
       // Immediately show success feedback
       toast({
@@ -149,9 +170,9 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         .from('customer_profiles')
         .select('*')
         .eq('phone_number', callToAnswer.customer_number)
-        .single();
+          .maybeSingle();
       
-      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 is "not found"
+      if (profileError) {
         console.error('❌ Error loading customer profile:', profileError);
       }
       
@@ -165,9 +186,9 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           .from('users')
           .select('*')
           .eq('phone_number', callToAnswer.customer_number)
-          .single();
+          .maybeSingle();
         
-        if (userError && userError.code !== 'PGRST116') {
+        if (userError) {
           console.error('❌ Error loading user data:', userError);
         }
         
