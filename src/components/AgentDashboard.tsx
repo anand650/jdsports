@@ -394,52 +394,22 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       // Add a small delay to ensure any async operations complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Then revert session back to AI handling - try step by step
-      console.log('🔄 Attempting to update session...');
-      try {
-        // Test with just status first
-        console.log('📝 Step 1: Updating status only...');
-        const { error: statusError } = await supabase
-          .from('chat_sessions')
-          .update({ status: 'active' })
-          .eq('id', session.id);
+      // Then revert session back to AI handling - single atomic update
+      console.log('🔄 Attempting to update session with atomic operation...');
+      const { error: sessionUpdateError } = await supabase
+        .from('chat_sessions')
+        .update({ 
+          status: 'active',
+          assigned_agent_id: null,
+          escalated_at: null
+        })
+        .eq('id', session.id);
 
-        if (statusError) {
-          console.error('❌ Status update error:', statusError);
-          throw statusError;
-        }
-        console.log('✅ Status updated successfully');
-
-        // Then clear agent assignment
-        console.log('📝 Step 2: Clearing agent assignment...');
-        const { error: agentError } = await supabase
-          .from('chat_sessions')
-          .update({ assigned_agent_id: null })
-          .eq('id', session.id);
-
-        if (agentError) {
-          console.error('❌ Agent clearing error:', agentError);
-          throw agentError;
-        }
-        console.log('✅ Agent assignment cleared successfully');
-
-        // Finally clear escalation timestamp
-        console.log('📝 Step 3: Clearing escalation timestamp...');
-        const { error: escalationError } = await supabase
-          .from('chat_sessions')
-          .update({ escalated_at: null })
-          .eq('id', session.id);
-
-        if (escalationError) {
-          console.error('❌ Escalation clearing error:', escalationError);
-          throw escalationError;
-        }
-        console.log('✅ Session fully updated successfully');
-        
-      } catch (sessionError) {
-        console.error('❌ Caught session update error:', sessionError);
-        throw sessionError;
+      if (sessionUpdateError) {
+        console.error('❌ Session update error:', sessionUpdateError);
+        throw sessionUpdateError;
       }
+      console.log('✅ Session updated successfully (atomic operation)');
 
       // After successful handover, trigger AI welcome back message
       console.log('🤖 Triggering AI welcome back response...');
