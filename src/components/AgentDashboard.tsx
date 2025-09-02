@@ -29,7 +29,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
     if (selectedSession) {
       fetchMessages(selectedSession.id);
     }
-  }, [selectedSession]);
+  }, [selectedSession?.id]); // Only depend on session ID to prevent unnecessary refetches
 
   useEffect(() => {
     // Subscribe to new chat sessions - listen for both escalated sessions and newly created ones
@@ -152,11 +152,11 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       }
     };
 
-    // Subscribe to messages for selected session
+    // Subscribe to messages for selected session using unified channel
     let messagesChannel: any = null;
     if (selectedSession) {
       messagesChannel = supabase
-        .channel('chat_messages_agent')
+        .channel(`chat_session_${selectedSession.id}`)
         .on(
           'postgres_changes',
           {
@@ -167,7 +167,31 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
           },
           (payload) => {
             const message = payload.new as ChatMessage;
-            setMessages(prev => [...prev, message]);
+            console.log('📨 Agent received new message via real-time:', message);
+            
+            // Only add user and AI messages via real-time (agent messages are added optimistically)
+            if (message.sender_type === 'user' || message.sender_type === 'ai') {
+              setMessages(prev => {
+                // Check for duplicates
+                const exists = prev.find(msg => msg.id === message.id);
+                if (exists) {
+                  console.log('⚠️ Message already exists in agent view, skipping:', message.id);
+                  return prev;
+                }
+                
+                console.log('✅ Adding', message.sender_type, 'message to agent view');
+                return [...prev, message].sort((a, b) => 
+                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
+              });
+            } else if (message.sender_type === 'agent') {
+              // Don't add agent messages from real-time, but also don't show error for handover messages
+              if (message.metadata?.is_agent_handover) {
+                console.log('⚠️ Ignoring agent handover message from real-time (expected behavior)');
+              } else {
+                console.log('⚠️ Ignoring agent message from real-time (already added optimistically)');
+              }
+            }
           }
         )
         .subscribe();
@@ -189,7 +213,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         .select(`
           *
         `)
-        .in('status', ['active', 'escalated'])
+        .in('status', ['escalated'])
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -292,25 +316,47 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
   const handleSendMessage = async (content: string) => {
     if (!selectedSession || !user) return;
 
-    const message = {
+    const tempMessage: ChatMessage = {
+      id: `temp_agent_${Date.now()}`,
       session_id: selectedSession.id,
-      sender_type: 'agent' as const,
+      sender_type: 'agent',
       sender_id: user.id,
       content,
       metadata: {},
       created_at: new Date().toISOString()
     };
 
+    // Add message optimistically to agent view
+    setMessages(prev => [...prev, tempMessage]);
+
     try {
-      const { error } = await supabase
+      const { data: insertedMessage, error } = await supabase
         .from('chat_messages')
-        .insert(message);
+        .insert({
+          session_id: selectedSession.id,
+          sender_type: 'agent',
+          sender_id: user.id,
+          content,
+          metadata: {}
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Message will be added via real-time subscription - don't add manually
+      // Update the temporary message with real ID from database
+      setMessages(prev => prev.map(msg => 
+        msg.id === tempMessage.id 
+          ? { ...msg, id: insertedMessage.id, created_at: insertedMessage.created_at }
+          : msg
+      ));
+
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      // Remove the failed message
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
+      
       toast({
         title: "Error",
         description: "Failed to send message",
@@ -321,12 +367,59 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   const handleCloseSession = async (session: ChatSession) => {
     try {
-      const { error } = await supabase
-        .from('chat_sessions')
-        .update({ status: 'closed' })
-        .eq('id', session.id);
+      console.log('🔄 Starting session handover process for session:', session.id);
+      console.log('🔄 Current user:', user?.id, 'Role:', user);
+      
+      // First, send a message to inform the customer about the handover back to AI
+      // (while the agent is still assigned to the session)
+      const handoverMessage = {
+        session_id: session.id,
+        sender_type: 'agent' as const,
+        sender_id: user?.id,
+        content: "The human agent has completed their assistance and handed your chat back to me, your AI assistant. I'm here to continue helping you with any questions you may have!",
+        metadata: { is_agent_handover: true }
+      };
 
-      if (error) throw error;
+      console.log('📝 Attempting to insert handover message...');
+      const { error: messageError } = await supabase
+        .from('chat_messages')
+        .insert(handoverMessage);
+
+      if (messageError) {
+        console.error('❌ Error sending handover message:', messageError);
+        throw messageError;
+      }
+      console.log('✅ Handover message sent successfully');
+
+      // Add a small delay to ensure any async operations complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Then revert session back to AI handling
+      console.log('🔄 Attempting to update session...');
+      try {
+        const { error } = await supabase
+          .from('chat_sessions')
+          .update({ 
+            status: 'active',
+            assigned_agent_id: null,
+            escalated_at: null
+          })
+          .eq('id', session.id);
+
+        if (error) {
+          console.error('❌ Session update error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          throw error;
+        }
+        console.log('✅ Session updated successfully');
+      } catch (sessionError) {
+        console.error('❌ Caught session update error:', sessionError);
+        throw sessionError;
+      }
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));
       if (selectedSession?.id === session.id) {
@@ -335,14 +428,14 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       }
 
       toast({
-        title: "Session Closed",
-        description: "Chat session has been ended",
+        title: "Session Handed Back to AI",
+        description: "Chat has been returned to AI assistant",
       });
     } catch (error) {
-      console.error('Error closing session:', error);
+      console.error('❌ Error handing session back to AI:', error);
       toast({
         title: "Error",
-        description: "Failed to close session",
+        description: "Failed to hand session back to AI",
         variant: "destructive",
       });
     }
