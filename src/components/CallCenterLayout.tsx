@@ -53,9 +53,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           console.log('🔔 New call inserted:', newCall);
           
           // Show incoming call notification for calls that need an agent
-          // (ringing calls or calls without an assigned agent)
+          // Include calls assigned to current agent that are still ringing
+          const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
+          
           if (newCall.call_direction === 'inbound' && 
-              (newCall.call_status === 'ringing' || 
+              ((newCall.call_status === 'ringing' && (!newCall.agent_id || newCall.agent_id === currentAgentId)) ||
                (newCall.call_status === 'in-progress' && !newCall.agent_id))) {
             console.log('🔔 Setting incoming call state:', newCall);
             setIncomingCall(newCall);
@@ -67,7 +69,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
             console.log('🔔 Call not shown as incoming:', {
               direction: newCall.call_direction,
               status: newCall.call_status,
-              agent: newCall.agent_id
+              agent: newCall.agent_id,
+              currentAgent: currentAgentId
             });
           }
         }
@@ -102,12 +105,14 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           }
           
           // Handle incoming call status changes
+          const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
+          
           if (incomingCall && updatedCall.id === incomingCall.id) {
             console.log('🔄 Processing incoming call update:', updatedCall.call_status);
-            // Only hide incoming call if it's completed, failed, or has been assigned to an agent
+            // Only hide incoming call if it's completed, failed, or answered (became in-progress)
             if (updatedCall.call_status === 'completed' || 
                 updatedCall.call_status === 'failed' ||
-                (updatedCall.agent_id && updatedCall.agent_id !== null)) {
+                updatedCall.call_status === 'in-progress') {
               console.log('🔄 Hiding incoming call notification');
               setIncomingCall(null);
             } else {
@@ -118,7 +123,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           
           // If this is a call that just got answered (status changed to in-progress), set as active
           if (updatedCall.call_status === 'in-progress' && 
-              updatedCall.agent_id && 
+              updatedCall.agent_id === currentAgentId && 
               !activeCall) {
             console.log('🎯 Setting newly answered call as active (from realtime):', updatedCall.id);
             console.log('🎯 Newly answered call object:', JSON.stringify(updatedCall, null, 2));
@@ -164,11 +169,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     try {
       // First update the call status and assign agent
       console.log('🔄 Updating call in database...');
+      const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
       const { data: updatedCall, error: updateError } = await supabase
         .from('calls')
         .update({ 
           call_status: 'in-progress',
-          agent_id: 'c8b54dd2-5c0c-4a49-8433-fe5957f34718', // Fixed agent ID for now
+          agent_id: currentAgentId,
           started_at: new Date().toISOString() // Ensure started_at is set
         })
         .eq('id', callToAnswer.id)
