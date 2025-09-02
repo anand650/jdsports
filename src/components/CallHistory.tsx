@@ -45,7 +45,8 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
           schema: 'public',
           table: 'calls'
         },
-        () => {
+        (payload) => {
+          console.log('📞 Call history update detected:', payload);
           loadCalls(); // Reload calls when any change happens
         }
       )

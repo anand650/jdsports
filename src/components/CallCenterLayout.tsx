@@ -37,8 +37,10 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           table: 'calls',
         },
         (payload) => {
+          console.log('🔔 New call detected:', payload.new);
           const newCall = payload.new as Call;
           if (newCall.call_status === 'ringing' && newCall.call_direction === 'inbound') {
+            console.log('🔔 Setting as incoming call:', newCall);
             setIncomingCall(newCall);
             toast({
               title: "Incoming Call",
