@@ -94,15 +94,27 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     const callToAnswer = call || incomingCall;
     if (!callToAnswer) return;
     
-    setActiveCall(callToAnswer);
-    setIncomingCall(null);
+    console.log('🔧 Answering call:', callToAnswer.id);
     
-    // Update call status to in-progress
     try {
-      await supabase
+      // First update the call status and assign agent
+      const { data: updatedCall, error: updateError } = await supabase
         .from('calls')
-        .update({ call_status: 'in-progress' })
-        .eq('id', callToAnswer.id);
+        .update({ 
+          call_status: 'in-progress',
+          agent_id: 'c8b54dd2-5c0c-4a49-8433-fe5957f34718' // Fixed agent ID for now
+        })
+        .eq('id', callToAnswer.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      
+      console.log('✅ Call status updated:', updatedCall);
+      
+      // Set active call with updated data
+      setActiveCall(updatedCall as Call);
+      setIncomingCall(null);
       
       toast({
         title: "Call Connected",
@@ -118,6 +130,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       
       if (profile) {
         setCustomerProfile(profile);
+        console.log('📋 Customer profile loaded:', profile);
       } else {
         // Try to find user by phone number and create profile
         const { data: userData } = await supabase
@@ -141,27 +154,36 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           
           if (newProfile) {
             setCustomerProfile(newProfile);
+            console.log('📋 New customer profile created:', newProfile);
           }
         }
       }
 
-      // Start real transcription for this call
-      try {
-        await supabase.functions.invoke('twilio-start-transcription', {
-          body: { callId: callToAnswer.id }
-        });
-        console.log('Real transcription started for call:', callToAnswer.id);
-      } catch (transcriptionError) {
-        console.error('Failed to start transcription:', transcriptionError);
-        toast({
-          title: "Transcription Warning",
-          description: "Transcription may not be available for this call",
-          variant: "destructive",
-        });
-      }
+      // Start transcription with a small delay to ensure call is properly connected
+      setTimeout(async () => {
+        try {
+          console.log('🎙️ Starting transcription for call:', callToAnswer.id);
+          const { error: transcriptionError } = await supabase.functions.invoke('twilio-start-transcription', {
+            body: { callId: callToAnswer.id }
+          });
+          
+          if (transcriptionError) {
+            console.error('❌ Transcription error:', transcriptionError);
+            toast({
+              title: "Transcription Warning",
+              description: "Transcription may not be available for this call",
+              variant: "destructive",
+            });
+          } else {
+            console.log('✅ Transcription started successfully');
+          }
+        } catch (error) {
+          console.error('❌ Failed to start transcription:', error);
+        }
+      }, 2000); // 2 second delay
 
     } catch (error) {
-      console.error('Error answering call:', error);
+      console.error('❌ Error answering call:', error);
       toast({
         title: "Error",
         description: "Failed to answer call",
