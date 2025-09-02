@@ -11,9 +11,10 @@ interface CallPanelProps {
   incomingCall: Call | null;
   onAnswerCall: (call?: Call) => void;
   onEndCall: () => void;
+  onClearDashboard: () => void;
 }
 
-export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEndCall }: CallPanelProps) => {
+export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEndCall, onClearDashboard }: CallPanelProps) => {
   const [callDuration, setCallDuration] = useState(0);
   
   const {
@@ -29,7 +30,11 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
     toggleMute,
     toggleHold,
     retryConnection,
-  } = useTwilioVoice();
+  } = useTwilioVoice(() => {
+    // Callback for when Twilio call disconnects
+    console.log('🔔 Twilio call disconnected - clearing dashboard state');
+    onClearDashboard();
+  });
 
   // Timer for call duration
   useEffect(() => {

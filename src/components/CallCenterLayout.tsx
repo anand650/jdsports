@@ -91,6 +91,14 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           if (activeCall && updatedCall.id === activeCall.id) {
             console.log('🔄 Updating existing activeCall state with:', updatedCall);
             setActiveCall(updatedCall);
+            
+            // Clear dashboard if call is completed/failed
+            if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+              console.log('🧹 Call ended - clearing dashboard state');
+              setActiveCall(null);
+              setCustomerProfile(null);
+              setIncomingCall(null);
+            }
           }
           
           // Handle incoming call status changes
@@ -118,11 +126,17 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
             setIncomingCall(null);
           }
           
-          // ADDITIONAL: Also check if this call should be active regardless of current activeCall state
-          if (updatedCall.call_status === 'in-progress' && updatedCall.agent_id) {
-            console.log('🔧 Force setting call as active due to in-progress status:', updatedCall.id);
-            setActiveCall(updatedCall);
-            setIncomingCall(null);
+          // Check for calls ending that aren't our current active call
+          if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+            if (activeCall && updatedCall.id === activeCall.id) {
+              console.log('🧹 Active call ended - clearing all dashboard state');
+              setActiveCall(null);
+              setCustomerProfile(null);
+            }
+            // Always clear incoming call if it ends
+            if (incomingCall && updatedCall.id === incomingCall.id) {
+              setIncomingCall(null);
+            }
           }
         }
       )
@@ -339,6 +353,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const handleEndCall = async () => {
     if (!activeCall) return;
 
+    console.log('🔚 handleEndCall called for call:', activeCall.id);
+
     try {
       // Call our edge function to properly end the Twilio call
       const { error } = await supabase.functions.invoke('twilio-end-call', {
@@ -354,8 +370,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: "Call has been terminated",
       });
 
+      // Immediately clear all dashboard state
+      console.log('🧹 Manually clearing dashboard state after ending call');
       setActiveCall(null);
       setCustomerProfile(null);
+      setIncomingCall(null);
     } catch (error) {
       console.error('Error ending call:', error);
       toast({
@@ -363,6 +382,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: "Failed to end call properly",
         variant: "destructive",
       });
+      
+      // Still clear state even if there was an error
+      console.log('🧹 Clearing dashboard state despite error');
+      setActiveCall(null);
+      setCustomerProfile(null);
+      setIncomingCall(null);
     }
   };
 
@@ -429,6 +454,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               incomingCall={incomingCall}
               onAnswerCall={handleAnswerCall}
               onEndCall={handleEndCall}
+              onClearDashboard={() => {
+                console.log('🧹 Dashboard clear requested from CallPanel');
+                setActiveCall(null);
+                setCustomerProfile(null);
+                setIncomingCall(null);
+              }}
             />
           </div>
         </aside>
