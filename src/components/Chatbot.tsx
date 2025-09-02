@@ -54,9 +54,27 @@ export const Chatbot = () => {
             if (newMessage.sender_type === 'agent' || newMessage.sender_type === 'ai') {
               setMessages(prev => {
                 // Check if message already exists to prevent duplicates
-                const exists = prev.find(msg => msg.id === newMessage.id);
+                // For AI messages, check by content and timestamp (within 5 seconds) since IDs might differ
+                const exists = prev.find(msg => {
+                  if (msg.id === newMessage.id) return true;
+                  
+                  // For AI messages, also check by content and recent timestamp to prevent duplicates
+                  if (newMessage.sender_type === 'ai' && msg.sender_type === 'ai') {
+                    const msgTime = new Date(msg.created_at).getTime();
+                    const newMsgTime = new Date(newMessage.created_at).getTime();
+                    const timeDiff = Math.abs(newMsgTime - msgTime);
+                    
+                    // If same content and within 5 seconds, consider it a duplicate
+                    if (msg.content === newMessage.content && timeDiff < 5000) {
+                      return true;
+                    }
+                  }
+                  
+                  return false;
+                });
+                
                 if (exists) {
-                  console.log('⚠️ Customer: Message already exists, skipping:', newMessage.id);
+                  console.log('⚠️ Customer: Message already exists, skipping:', newMessage.content.substring(0, 50) + '...');
                   return prev;
                 }
                 
