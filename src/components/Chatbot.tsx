@@ -304,8 +304,20 @@ export const Chatbot = () => {
       setNeedsEscalation(response.needsEscalation);
       setContextUsed(response.contextUsed);
       
-      // AI response will come through real-time subscription
-      // Don't add it locally to prevent duplicates
+      // Add AI response immediately (don't wait for real-time)
+      const aiMessage: ChatMessage = {
+        id: `ai_${Date.now()}`,
+        session_id: session!.id,
+        sender_type: 'ai',
+        content: response.message,
+        metadata: { 
+          escalation_suggested: response.needsEscalation,
+          context_used: response.contextUsed
+        },
+        created_at: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
       
     } catch (error) {
       console.error('Error getting AI response:', error);
