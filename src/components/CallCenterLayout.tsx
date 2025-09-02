@@ -84,9 +84,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           console.log('📞 Call updated:', payload.new);
           const updatedCall = payload.new as Call;
           
+          console.log('🔍 Current activeCall before update:', activeCall?.id, 'status:', activeCall?.call_status);
+          console.log('🔍 Updated call:', updatedCall.id, 'status:', updatedCall.call_status);
+          
           // Update active call if it matches
           if (activeCall && updatedCall.id === activeCall.id) {
-            console.log('🔄 Updating activeCall state with:', updatedCall);
+            console.log('🔄 Updating existing activeCall state with:', updatedCall);
             setActiveCall(updatedCall);
           }
           
@@ -109,7 +112,15 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           if (updatedCall.call_status === 'in-progress' && 
               updatedCall.agent_id && 
               !activeCall) {
-            console.log('🎯 Setting newly answered call as active:', updatedCall.id);
+            console.log('🎯 Setting newly answered call as active (from realtime):', updatedCall.id);
+            console.log('🎯 Newly answered call object:', JSON.stringify(updatedCall, null, 2));
+            setActiveCall(updatedCall);
+            setIncomingCall(null);
+          }
+          
+          // ADDITIONAL: Also check if this call should be active regardless of current activeCall state
+          if (updatedCall.call_status === 'in-progress' && updatedCall.agent_id) {
+            console.log('🔧 Force setting call as active due to in-progress status:', updatedCall.id);
             setActiveCall(updatedCall);
             setIncomingCall(null);
           }
@@ -126,6 +137,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     console.log('🔧 *** handleAnswerCall TRIGGERED ***');
     console.log('🔧 handleAnswerCall called with:', call?.id || 'no call provided');
     console.log('🔧 incomingCall state:', incomingCall?.id || 'no incoming call');
+    console.log('🔧 activeCall state BEFORE:', activeCall?.id || 'no active call');
     
     const callToAnswer = call || incomingCall;
     if (!callToAnswer) {
@@ -172,7 +184,13 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       
       // Set active call with updated data  
       console.log('🎯 Setting activeCall state to call with status:', updatedCall.call_status);
+      console.log('🎯 Full updatedCall object:', JSON.stringify(updatedCall, null, 2));
       setActiveCall(updatedCall as Call);
+      
+      // Force a state verification after setting
+      setTimeout(() => {
+        console.log('🔍 activeCall state verification after 100ms:', activeCall?.id, activeCall?.call_status);
+      }, 100);
       
       // Immediately show success feedback
       toast({
