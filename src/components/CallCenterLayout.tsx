@@ -37,10 +37,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           table: 'calls',
         },
         (payload) => {
-          console.log('🔔 New call detected:', payload.new);
           const newCall = payload.new as Call;
+          console.log('🔔 New call inserted:', newCall);
+          
+          // Show incoming call notification for ringing inbound calls
           if (newCall.call_status === 'ringing' && newCall.call_direction === 'inbound') {
-            console.log('🔔 Setting as incoming call:', newCall);
             setIncomingCall(newCall);
             toast({
               title: "Incoming Call",
@@ -57,10 +58,15 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           table: 'calls',
         },
         (payload) => {
+          console.log('📞 Call updated:', payload.new);
           const updatedCall = payload.new as Call;
+          
+          // Update active call if it matches
           if (activeCall && updatedCall.id === activeCall.id) {
             setActiveCall(updatedCall);
           }
+          
+          // Handle incoming call status changes
           if (incomingCall && updatedCall.id === incomingCall.id) {
             if (updatedCall.call_status !== 'ringing') {
               setIncomingCall(null);
