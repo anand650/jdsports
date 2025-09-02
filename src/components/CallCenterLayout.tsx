@@ -111,7 +111,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         .from('calls')
         .update({ 
           call_status: 'in-progress',
-          agent_id: 'c8b54dd2-5c0c-4a49-8433-fe5957f34718' // Fixed agent ID for now
+          agent_id: 'c8b54dd2-5c0c-4a49-8433-fe5957f34718', // Fixed agent ID for now
+          started_at: new Date().toISOString() // Ensure started_at is set
         })
         .eq('id', callToAnswer.id)
         .select()
@@ -122,38 +123,57 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         throw updateError;
       }
       
+      if (!updatedCall) {
+        console.error('❌ No updated call data returned');
+        throw new Error('Failed to get updated call data');
+      }
+      
       console.log('✅ Call status updated in database:', updatedCall);
       
-      // Set active call with updated data
-      console.log('🎯 Setting activeCall state...');
-      setActiveCall(updatedCall as Call);
+      // Force clear incoming call first
       setIncomingCall(null);
       
+      // Set active call with updated data  
+      console.log('🎯 Setting activeCall state...');
+      setActiveCall(updatedCall as Call);
+      
+      // Immediately show success feedback
       toast({
         title: "Call Connected",
         description: `Connected to ${callToAnswer.customer_number}`,
       });
-
-      // Load comprehensive customer profile data
-      const { data: profile } = await supabase
+      
+      // Load comprehensive customer profile data immediately
+      console.log('📋 Loading customer profile for:', callToAnswer.customer_number);
+      const { data: profile, error: profileError } = await supabase
         .from('customer_profiles')
         .select('*')
         .eq('phone_number', callToAnswer.customer_number)
         .single();
       
+      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Error loading customer profile:', profileError);
+      }
+      
       if (profile) {
-        setCustomerProfile(profile);
         console.log('📋 Customer profile loaded:', profile);
+        setCustomerProfile(profile);
       } else {
+        console.log('📋 No existing profile, attempting to create one...');
         // Try to find user by phone number and create profile
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('*')
           .eq('phone_number', callToAnswer.customer_number)
           .single();
         
+        if (userError && userError.code !== 'PGRST116') {
+          console.error('❌ Error loading user data:', userError);
+        }
+        
         if (userData) {
-          const { data: newProfile } = await supabase
+          console.log('📋 Found user data, creating profile:', userData);
+          const { data: newProfile, error: createError } = await supabase
             .from('customer_profiles')
             .insert({
               phone_number: callToAnswer.customer_number,
@@ -165,9 +185,31 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
             .select()
             .single();
           
-          if (newProfile) {
-            setCustomerProfile(newProfile);
+          if (createError) {
+            console.error('❌ Error creating customer profile:', createError);
+          } else if (newProfile) {
             console.log('📋 New customer profile created:', newProfile);
+            setCustomerProfile(newProfile);
+          }
+        } else {
+          // Create minimal profile for unknown customer
+          console.log('📋 Creating minimal profile for unknown customer');
+          const { data: minimalProfile, error: minimalError } = await supabase
+            .from('customer_profiles')
+            .insert({
+              phone_number: callToAnswer.customer_number,
+              name: `Customer ${callToAnswer.customer_number.slice(-4)}`,
+              call_history_count: 1,
+              last_interaction_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (minimalError) {
+            console.error('❌ Error creating minimal profile:', minimalError);
+          } else if (minimalProfile) {
+            console.log('📋 Minimal customer profile created:', minimalProfile);
+            setCustomerProfile(minimalProfile);
           }
         }
       }
