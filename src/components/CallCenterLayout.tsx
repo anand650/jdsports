@@ -25,7 +25,17 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const { toast } = useToast();
 
-  console.log('🏢 CallCenterLayout rendered - activeCall:', activeCall?.id, 'customerProfile:', customerProfile?.id);
+  // Debug active call changes
+  useEffect(() => {
+    console.log('🏢 CallCenterLayout - activeCall changed:', {
+      id: activeCall?.id,
+      status: activeCall?.call_status,
+      agentId: activeCall?.agent_id,
+      customerNumber: activeCall?.customer_number
+    });
+  }, [activeCall]);
+
+  console.log('🏢 CallCenterLayout rendered - activeCall:', activeCall?.id, 'status:', activeCall?.call_status);
 
   // Subscribe to incoming calls and call updates
   useEffect(() => {
@@ -143,25 +153,24 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       }
       
       console.log('✅ Call status updated in database:', updatedCall);
+      console.log('🎯 Updated call object:', JSON.stringify(updatedCall, null, 2));
+      
+      // Ensure we have the correct status
+      if (updatedCall.call_status !== 'in-progress') {
+        console.error('❌ Call status was not updated correctly! Expected: in-progress, Got:', updatedCall.call_status);
+      }
       
       // Force clear incoming call first
       setIncomingCall(null);
       
       // Set active call with updated data  
-      console.log('🎯 Setting activeCall state to:', updatedCall);
-      console.log('🎯 Call status in updated data:', updatedCall.call_status);
-      console.log('🎯 Agent ID in updated data:', updatedCall.agent_id);
+      console.log('🎯 Setting activeCall state to call with status:', updatedCall.call_status);
       setActiveCall(updatedCall as Call);
-      
-      // Force a small delay to ensure state is updated
-      setTimeout(() => {
-        console.log('🔍 Current activeCall after delay:', activeCall?.id, activeCall?.call_status);
-      }, 100);
       
       // Immediately show success feedback
       toast({
-        title: "Call Connected",
-        description: `Connected to ${callToAnswer.customer_number}`,
+        title: "Call Connected", 
+        description: `Connected to ${callToAnswer.customer_number} - Status: ${updatedCall.call_status}`,
       });
       
       // Load comprehensive customer profile data immediately
