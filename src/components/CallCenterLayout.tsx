@@ -40,8 +40,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           const newCall = payload.new as Call;
           console.log('🔔 New call inserted:', newCall);
           
-          // Show incoming call notification for ringing inbound calls
-          if (newCall.call_status === 'ringing' && newCall.call_direction === 'inbound') {
+          // Show incoming call notification for calls that need an agent
+          // (ringing calls or calls without an assigned agent)
+          if (newCall.call_direction === 'inbound' && 
+              (newCall.call_status === 'ringing' || 
+               (newCall.call_status === 'in-progress' && !newCall.agent_id))) {
+            console.log('🔔 Showing as incoming call:', newCall);
             setIncomingCall(newCall);
             toast({
               title: "Incoming Call",
@@ -68,7 +72,10 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           
           // Handle incoming call status changes
           if (incomingCall && updatedCall.id === incomingCall.id) {
-            if (updatedCall.call_status !== 'ringing') {
+            // Only hide incoming call if it's completed, failed, or has been assigned to an agent
+            if (updatedCall.call_status === 'completed' || 
+                updatedCall.call_status === 'failed' ||
+                (updatedCall.agent_id && updatedCall.agent_id !== null)) {
               setIncomingCall(null);
             } else {
               setIncomingCall(updatedCall);

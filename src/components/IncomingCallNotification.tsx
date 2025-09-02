@@ -21,7 +21,7 @@ export const IncomingCallNotification = ({
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     
-    if (incomingCall && incomingCall.call_status === 'ringing') {
+    if (incomingCall && (incomingCall.call_status === 'ringing' || incomingCall.call_status === 'in-progress')) {
       interval = setInterval(() => {
         setRingingDuration(prev => prev + 1);
       }, 1000);
@@ -34,7 +34,7 @@ export const IncomingCallNotification = ({
     };
   }, [incomingCall]);
 
-  if (!incomingCall || incomingCall.call_status !== 'ringing') {
+  if (!incomingCall || (incomingCall.call_status === 'completed' || incomingCall.call_status === 'failed')) {
     return null;
   }
 
