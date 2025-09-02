@@ -67,7 +67,10 @@ export const IncomingCallNotification = ({
           
           <div className="flex gap-2">
             <Button 
-              onClick={() => onAnswer(incomingCall)}
+              onClick={() => {
+                console.log('🔵 IncomingCallNotification Answer button clicked!');
+                onAnswer(incomingCall);
+              }}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
             >
               <Phone className="mr-2 h-4 w-4" />

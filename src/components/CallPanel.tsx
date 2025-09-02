@@ -54,6 +54,7 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
   };
 
   const handleAnswer = () => {
+    console.log('🔵 CallPanel Answer button clicked!');
     answerCall();
     onAnswerCall();
   };

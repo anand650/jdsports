@@ -57,11 +57,17 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           if (newCall.call_direction === 'inbound' && 
               (newCall.call_status === 'ringing' || 
                (newCall.call_status === 'in-progress' && !newCall.agent_id))) {
-            console.log('🔔 Showing as incoming call:', newCall);
+            console.log('🔔 Setting incoming call state:', newCall);
             setIncomingCall(newCall);
             toast({
               title: "Incoming Call",
               description: `Call from ${newCall.customer_number}`,
+            });
+          } else {
+            console.log('🔔 Call not shown as incoming:', {
+              direction: newCall.call_direction,
+              status: newCall.call_status,
+              agent: newCall.agent_id
             });
           }
         }
@@ -117,6 +123,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   }, [activeCall, incomingCall, toast]);
 
   const handleAnswerCall = async (call?: Call) => {
+    console.log('🔧 *** handleAnswerCall TRIGGERED ***');
     console.log('🔧 handleAnswerCall called with:', call?.id || 'no call provided');
     console.log('🔧 incomingCall state:', incomingCall?.id || 'no incoming call');
     
