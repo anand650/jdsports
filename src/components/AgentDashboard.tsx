@@ -184,8 +184,13 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
                   new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
               });
-            } else {
-              console.log('⚠️ Ignoring agent message from real-time (already added optimistically)');
+            } else if (message.sender_type === 'agent') {
+              // Don't add agent messages from real-time, but also don't show error for handover messages
+              if (message.metadata?.is_agent_handover) {
+                console.log('⚠️ Ignoring agent handover message from real-time (expected behavior)');
+              } else {
+                console.log('⚠️ Ignoring agent message from real-time (already added optimistically)');
+              }
             }
           }
         )
@@ -386,22 +391,35 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       }
       console.log('✅ Handover message sent successfully');
 
+      // Add a small delay to ensure any async operations complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Then revert session back to AI handling
       console.log('🔄 Attempting to update session...');
-      const { error } = await supabase
-        .from('chat_sessions')
-        .update({ 
-          status: 'active',
-          assigned_agent_id: null,
-          escalated_at: null
-        })
-        .eq('id', session.id);
+      try {
+        const { error } = await supabase
+          .from('chat_sessions')
+          .update({ 
+            status: 'active',
+            assigned_agent_id: null,
+            escalated_at: null
+          })
+          .eq('id', session.id);
 
-      if (error) {
-        console.error('❌ Error updating session:', error);
-        throw error;
+        if (error) {
+          console.error('❌ Session update error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          throw error;
+        }
+        console.log('✅ Session updated successfully');
+      } catch (sessionError) {
+        console.error('❌ Caught session update error:', sessionError);
+        throw sessionError;
       }
-      console.log('✅ Session updated successfully');
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));
       if (selectedSession?.id === session.id) {
