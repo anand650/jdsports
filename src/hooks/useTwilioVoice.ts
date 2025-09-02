@@ -3,7 +3,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-export const useTwilioVoice = () => {
+export const useTwilioVoice = (onCallDisconnected?: () => void) => {
   const [device, setDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -183,6 +183,12 @@ export const useTwilioVoice = () => {
       setActiveCall(null);
       setIsMuted(false);
       setIsOnHold(false);
+      
+      // Notify parent component to clear dashboard state
+      if (onCallDisconnected) {
+        console.log('🔔 Notifying parent component of call disconnection');
+        onCallDisconnected();
+      }
     });
 
     call.on('cancel', () => {

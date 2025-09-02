@@ -21,7 +21,7 @@ export const IncomingCallNotification = ({
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     
-    if (incomingCall && incomingCall.call_status === 'ringing') {
+    if (incomingCall && (incomingCall.call_status === 'ringing' || incomingCall.call_status === 'in-progress')) {
       interval = setInterval(() => {
         setRingingDuration(prev => prev + 1);
       }, 1000);
@@ -34,7 +34,7 @@ export const IncomingCallNotification = ({
     };
   }, [incomingCall]);
 
-  if (!incomingCall || incomingCall.call_status !== 'ringing') {
+  if (!incomingCall || (incomingCall.call_status === 'completed' || incomingCall.call_status === 'failed')) {
     return null;
   }
 
@@ -67,7 +67,10 @@ export const IncomingCallNotification = ({
           
           <div className="flex gap-2">
             <Button 
-              onClick={() => onAnswer(incomingCall)}
+              onClick={() => {
+                console.log('🔵 IncomingCallNotification Answer button clicked!');
+                onAnswer(incomingCall);
+              }}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
             >
               <Phone className="mr-2 h-4 w-4" />

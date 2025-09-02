@@ -25,6 +25,18 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const { toast } = useToast();
 
+  // Debug active call changes
+  useEffect(() => {
+    console.log('🏢 CallCenterLayout - activeCall changed:', {
+      id: activeCall?.id,
+      status: activeCall?.call_status,
+      agentId: activeCall?.agent_id,
+      customerNumber: activeCall?.customer_number
+    });
+  }, [activeCall]);
+
+  console.log('🏢 CallCenterLayout rendered - activeCall:', activeCall?.id, 'status:', activeCall?.call_status);
+
   // Subscribe to incoming calls and call updates
   useEffect(() => {
     const channel = supabase
@@ -38,11 +50,27 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         },
         (payload) => {
           const newCall = payload.new as Call;
-          if (newCall.call_status === 'ringing' && newCall.call_direction === 'inbound') {
+          console.log('🔔 New call inserted:', newCall);
+          
+          // Show incoming call notification for calls that need an agent
+          // Include calls assigned to current agent that are still ringing
+          const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
+          
+          if (newCall.call_direction === 'inbound' && 
+              ((newCall.call_status === 'ringing' && (!newCall.agent_id || newCall.agent_id === currentAgentId)) ||
+               (newCall.call_status === 'in-progress' && !newCall.agent_id))) {
+            console.log('🔔 Setting incoming call state:', newCall);
             setIncomingCall(newCall);
             toast({
               title: "Incoming Call",
               description: `Call from ${newCall.customer_number}`,
+            });
+          } else {
+            console.log('🔔 Call not shown as incoming:', {
+              direction: newCall.call_direction,
+              status: newCall.call_status,
+              agent: newCall.agent_id,
+              currentAgent: currentAgentId
             });
           }
         }
@@ -55,15 +83,64 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           table: 'calls',
         },
         (payload) => {
+          console.log('📞 Call history change: UPDATE');
+          console.log('📞 Call updated:', payload.new);
           const updatedCall = payload.new as Call;
+          
+          console.log('🔍 Current activeCall before update:', activeCall?.id, 'status:', activeCall?.call_status);
+          console.log('🔍 Updated call:', updatedCall.id, 'status:', updatedCall.call_status);
+          
+          // Update active call if it matches
           if (activeCall && updatedCall.id === activeCall.id) {
+            console.log('🔄 Updating existing activeCall state with:', updatedCall);
             setActiveCall(updatedCall);
+            
+            // Clear dashboard if call is completed/failed
+            if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+              console.log('🧹 Call ended - clearing dashboard state');
+              setActiveCall(null);
+              setCustomerProfile(null);
+              setIncomingCall(null);
+            }
           }
+          
+          // Handle incoming call status changes
+          const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
+          
           if (incomingCall && updatedCall.id === incomingCall.id) {
-            if (updatedCall.call_status !== 'ringing') {
+            console.log('🔄 Processing incoming call update:', updatedCall.call_status);
+            // Only hide incoming call if it's completed, failed, or answered (became in-progress)
+            if (updatedCall.call_status === 'completed' || 
+                updatedCall.call_status === 'failed' ||
+                updatedCall.call_status === 'in-progress') {
+              console.log('🔄 Hiding incoming call notification');
               setIncomingCall(null);
             } else {
+              console.log('🔄 Updating incoming call state');
               setIncomingCall(updatedCall);
+            }
+          }
+          
+          // If this is a call that just got answered (status changed to in-progress), set as active
+          if (updatedCall.call_status === 'in-progress' && 
+              updatedCall.agent_id === currentAgentId && 
+              !activeCall) {
+            console.log('🎯 Setting newly answered call as active (from realtime):', updatedCall.id);
+            console.log('🎯 Newly answered call object:', JSON.stringify(updatedCall, null, 2));
+            setActiveCall(updatedCall);
+            setIncomingCall(null);
+          }
+          
+          // Check for calls ending that aren't our current active call
+          if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+            if (activeCall && updatedCall.id === activeCall.id) {
+              console.log('🧹 Active call ended - clearing all dashboard state');
+              setActiveCall(null);
+              setCustomerProfile(null);
+            }
+            // Always clear incoming call if it ends
+            if (incomingCall && updatedCall.id === incomingCall.id) {
+              setIncomingCall(null);
             }
           }
         }
@@ -76,43 +153,102 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   }, [activeCall, incomingCall, toast]);
 
   const handleAnswerCall = async (call?: Call) => {
+    console.log('🔧 *** handleAnswerCall TRIGGERED ***');
+    console.log('🔧 handleAnswerCall called with:', call?.id || 'no call provided');
+    console.log('🔧 incomingCall state:', incomingCall?.id || 'no incoming call');
+    console.log('🔧 activeCall state BEFORE:', activeCall?.id || 'no active call');
+    
     const callToAnswer = call || incomingCall;
-    if (!callToAnswer) return;
+    if (!callToAnswer) {
+      console.error('❌ No call to answer');
+      return;
+    }
     
-    setActiveCall(callToAnswer);
-    setIncomingCall(null);
+    console.log('📞 Answering call:', callToAnswer.id, 'status:', callToAnswer.call_status);
     
-    // Update call status to in-progress
     try {
-      await supabase
+      // First update the call status and assign agent
+      console.log('🔄 Updating call in database...');
+      const currentAgentId = 'c8b54dd2-5c0c-4a49-8433-fe5957f34718'; // Fixed agent ID for now
+      const { data: updatedCall, error: updateError } = await supabase
         .from('calls')
-        .update({ call_status: 'in-progress' })
-        .eq('id', callToAnswer.id);
-      
-      toast({
-        title: "Call Connected",
-        description: `Connected to ${callToAnswer.customer_number}`,
-      });
+        .update({ 
+          call_status: 'in-progress',
+          agent_id: currentAgentId,
+          started_at: new Date().toISOString() // Ensure started_at is set
+        })
+        .eq('id', callToAnswer.id)
+        .select()
+        .single();
 
-      // Load comprehensive customer profile data
-      const { data: profile } = await supabase
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        throw updateError;
+      }
+      
+      if (!updatedCall) {
+        console.error('❌ No updated call data returned');
+        throw new Error('Failed to get updated call data');
+      }
+      
+      console.log('✅ Call status updated in database:', updatedCall);
+      console.log('🎯 Updated call object:', JSON.stringify(updatedCall, null, 2));
+      
+      // Ensure we have the correct status
+      if (updatedCall.call_status !== 'in-progress') {
+        console.error('❌ Call status was not updated correctly! Expected: in-progress, Got:', updatedCall.call_status);
+      }
+      
+      // Force clear incoming call first
+      setIncomingCall(null);
+      
+      // Set active call with updated data  
+      console.log('🎯 Setting activeCall state to call with status:', updatedCall.call_status);
+      console.log('🎯 Full updatedCall object:', JSON.stringify(updatedCall, null, 2));
+      setActiveCall(updatedCall as Call);
+      
+      // Force a state verification after setting
+      setTimeout(() => {
+        console.log('🔍 activeCall state verification after 100ms:', activeCall?.id, activeCall?.call_status);
+      }, 100);
+      
+      // Immediately show success feedback
+      toast({
+        title: "Call Connected", 
+        description: `Connected to ${callToAnswer.customer_number} - Status: ${updatedCall.call_status}`,
+      });
+      
+      // Load comprehensive customer profile data immediately
+      console.log('📋 Loading customer profile for:', callToAnswer.customer_number);
+      const { data: profile, error: profileError } = await supabase
         .from('customer_profiles')
         .select('*')
         .eq('phone_number', callToAnswer.customer_number)
-        .single();
+          .maybeSingle();
+      
+      if (profileError) {
+        console.error('❌ Error loading customer profile:', profileError);
+      }
       
       if (profile) {
+        console.log('📋 Customer profile loaded:', profile);
         setCustomerProfile(profile);
       } else {
+        console.log('📋 No existing profile, attempting to create one...');
         // Try to find user by phone number and create profile
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('*')
           .eq('phone_number', callToAnswer.customer_number)
-          .single();
+          .maybeSingle();
+        
+        if (userError) {
+          console.error('❌ Error loading user data:', userError);
+        }
         
         if (userData) {
-          const { data: newProfile } = await supabase
+          console.log('📋 Found user data, creating profile:', userData);
+          const { data: newProfile, error: createError } = await supabase
             .from('customer_profiles')
             .insert({
               phone_number: callToAnswer.customer_number,
@@ -124,29 +260,78 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
             .select()
             .single();
           
-          if (newProfile) {
+          if (createError) {
+            console.error('❌ Error creating customer profile:', createError);
+          } else if (newProfile) {
+            console.log('📋 New customer profile created:', newProfile);
             setCustomerProfile(newProfile);
+          }
+        } else {
+          // Create minimal profile for unknown customer
+          console.log('📋 Creating minimal profile for unknown customer');
+          const { data: minimalProfile, error: minimalError } = await supabase
+            .from('customer_profiles')
+            .insert({
+              phone_number: callToAnswer.customer_number,
+              name: `Customer ${callToAnswer.customer_number.slice(-4)}`,
+              call_history_count: 1,
+              last_interaction_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (minimalError) {
+            console.error('❌ Error creating minimal profile:', minimalError);
+          } else if (minimalProfile) {
+            console.log('📋 Minimal customer profile created:', minimalProfile);
+            setCustomerProfile(minimalProfile);
           }
         }
       }
 
-      // Start real transcription for this call
-      try {
-        await supabase.functions.invoke('twilio-start-transcription', {
-          body: { callId: callToAnswer.id }
-        });
-        console.log('Real transcription started for call:', callToAnswer.id);
-      } catch (transcriptionError) {
-        console.error('Failed to start transcription:', transcriptionError);
-        toast({
-          title: "Transcription Warning",
-          description: "Transcription may not be available for this call",
-          variant: "destructive",
-        });
-      }
+      // Start transcription with a small delay to ensure call is properly connected
+      setTimeout(async () => {
+        try {
+          console.log('🎙️ Starting transcription for call:', callToAnswer.id);
+          const { data: transcriptionResult, error: transcriptionError } = await supabase.functions.invoke('twilio-start-transcription', {
+            body: { callId: callToAnswer.id }
+          });
+          
+          if (transcriptionError) {
+            console.error('❌ Transcription error:', transcriptionError);
+            toast({
+              title: "Transcription Warning",
+              description: "Transcription may not be available for this call",
+              variant: "destructive",
+            });
+          } else {
+            console.log('✅ Transcription response:', transcriptionResult);
+            if (transcriptionResult?.hasTranscription === false) {
+              console.log('ℹ️ No Twilio SID available - transcription not started');
+              toast({
+                title: "Transcription Info",
+                description: "Call connected, but live transcription unavailable",
+              });
+            } else {
+              console.log('✅ Transcription started successfully');
+              toast({
+                title: "Transcription Started",
+                description: "Live transcription is now active",
+              });
+            }
+          }
+        } catch (error) {
+          console.error('❌ Failed to start transcription:', error);
+          toast({
+            title: "Transcription Warning", 
+            description: "Could not start live transcription",
+            variant: "destructive",
+          });
+        }
+      }, 2000); // 2 second delay
 
     } catch (error) {
-      console.error('Error answering call:', error);
+      console.error('❌ Error answering call:', error);
       toast({
         title: "Error",
         description: "Failed to answer call",
@@ -174,6 +359,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const handleEndCall = async () => {
     if (!activeCall) return;
 
+    console.log('🔚 handleEndCall called for call:', activeCall.id);
+
     try {
       // Call our edge function to properly end the Twilio call
       const { error } = await supabase.functions.invoke('twilio-end-call', {
@@ -189,8 +376,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: "Call has been terminated",
       });
 
+      // Immediately clear all dashboard state
+      console.log('🧹 Manually clearing dashboard state after ending call');
       setActiveCall(null);
       setCustomerProfile(null);
+      setIncomingCall(null);
     } catch (error) {
       console.error('Error ending call:', error);
       toast({
@@ -198,6 +388,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: "Failed to end call properly",
         variant: "destructive",
       });
+      
+      // Still clear state even if there was an error
+      console.log('🧹 Clearing dashboard state despite error');
+      setActiveCall(null);
+      setCustomerProfile(null);
+      setIncomingCall(null);
     }
   };
 
@@ -261,8 +457,15 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           <div className="p-4 h-full">
             <CallPanel
               activeCall={activeCall}
+              incomingCall={incomingCall}
               onAnswerCall={handleAnswerCall}
               onEndCall={handleEndCall}
+              onClearDashboard={() => {
+                console.log('🧹 Dashboard clear requested from CallPanel');
+                setActiveCall(null);
+                setCustomerProfile(null);
+                setIncomingCall(null);
+              }}
             />
           </div>
         </aside>

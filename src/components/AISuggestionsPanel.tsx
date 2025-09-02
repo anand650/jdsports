@@ -24,6 +24,8 @@ export const AISuggestionsPanel = ({ callId }: AISuggestionsPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  console.log('💡 AISuggestionsPanel rendered with callId:', callId);
+
   // Load existing suggestions when call starts
   useEffect(() => {
     if (!callId) {

@@ -22,6 +22,8 @@ export const LiveTranscriptPanel = ({ callId }: LiveTranscriptPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  console.log('📺 LiveTranscriptPanel rendered with callId:', callId);
+
   // Auto-scroll to bottom when new transcripts arrive
   useEffect(() => {
     if (scrollRef.current) {
