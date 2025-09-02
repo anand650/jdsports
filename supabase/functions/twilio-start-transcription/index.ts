@@ -28,10 +28,10 @@ serve(async (req) => {
 
     console.log('Starting transcription for call:', callId);
 
-    // Get the call record to find the Twilio Call SID
+    // Get the call record to find the Twilio Call SID and status
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
-      .select('twilio_call_sid')
+      .select('twilio_call_sid, call_status')
       .eq('id', callId)
       .single();
 
@@ -40,6 +40,21 @@ serve(async (req) => {
     }
 
     console.log('Found call record:', callRecord);
+
+    // Only start transcription if call is in progress
+    if (callRecord.call_status !== 'in-progress') {
+      console.log(`Call is in ${callRecord.call_status} state, waiting for in-progress state`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: `Call is in ${callRecord.call_status} state, transcription can only start when call is in-progress`,
+          retry: true
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     // Initialize Twilio client
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
