@@ -394,6 +394,15 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       // Add a small delay to ensure any async operations complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      // Debug: Log current user and session details
+      console.log('🔍 Debug info before update:');
+      console.log('- Current user ID:', user?.id);
+      console.log('- User role:', user?.user_metadata?.role);
+      console.log('- Session ID:', session.id);
+      console.log('- Session user_id:', session.user_id);
+      console.log('- Session assigned_agent_id:', session.assigned_agent_id);
+      console.log('- Session status:', session.status);
+
       // Then revert session back to AI handling - single atomic update
       console.log('🔄 Attempting to update session with atomic operation...');
       const { error: sessionUpdateError } = await supabase
@@ -407,6 +416,12 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
       if (sessionUpdateError) {
         console.error('❌ Session update error:', sessionUpdateError);
+        console.log('🔍 Error details:', {
+          code: sessionUpdateError.code,
+          message: sessionUpdateError.message,
+          details: sessionUpdateError.details,
+          hint: sessionUpdateError.hint
+        });
         throw sessionUpdateError;
       }
       console.log('✅ Session updated successfully (atomic operation)');
