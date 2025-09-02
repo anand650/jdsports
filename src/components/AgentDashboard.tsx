@@ -362,22 +362,12 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   const handleCloseSession = async (session: ChatSession) => {
     try {
-      // Revert session back to AI handling instead of closing it
-      const { error } = await supabase
-        .from('chat_sessions')
-        .update({ 
-          status: 'active',
-          assigned_agent_id: null,
-          escalated_at: null
-        })
-        .eq('id', session.id);
-
-      if (error) throw error;
-
-      // Send a message to inform the customer about the handover back to AI
+      // First, send a message to inform the customer about the handover back to AI
+      // (while the agent is still assigned to the session)
       const handoverMessage = {
         session_id: session.id,
-        sender_type: 'ai',
+        sender_type: 'agent' as const,
+        sender_id: user?.id,
         content: "The human agent has completed their assistance and handed your chat back to me, your AI assistant. I'm here to continue helping you with any questions you may have!",
         metadata: { is_agent_handover: true }
       };
@@ -388,7 +378,20 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
       if (messageError) {
         console.error('Error sending handover message:', messageError);
+        throw messageError;
       }
+
+      // Then revert session back to AI handling
+      const { error } = await supabase
+        .from('chat_sessions')
+        .update({ 
+          status: 'active',
+          assigned_agent_id: null,
+          escalated_at: null
+        })
+        .eq('id', session.id);
+
+      if (error) throw error;
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));
       if (selectedSession?.id === session.id) {
