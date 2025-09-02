@@ -66,14 +66,13 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
     const callToAnswer = dbCall || incomingCall;
     console.log('🔵 CallPanel callToAnswer:', callToAnswer?.id, 'status:', callToAnswer?.call_status);
     
-    answerCall();
-    
+    // Use the exact same flow as the popup notification
     if (callToAnswer) {
-      console.log('🔵 CallPanel calling onAnswerCall with:', callToAnswer.id);
-      onAnswerCall(callToAnswer);
+      console.log('🔵 CallPanel triggering Twilio answer and onAnswerCall with:', callToAnswer.id);
+      answerCall(); // Twilio answer
+      onAnswerCall(callToAnswer); // Same function as popup uses
     } else {
       console.error('❌ CallPanel: No call to answer (neither dbCall nor incomingCall)');
-      onAnswerCall();
     }
   };
 
