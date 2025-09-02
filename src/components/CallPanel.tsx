@@ -8,7 +8,7 @@ import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 interface CallPanelProps {
   activeCall: Call | null;
-  onAnswerCall: () => void;
+  onAnswerCall: (call?: Call) => void;
   onEndCall: () => void;
 }
 
@@ -55,8 +55,15 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
 
   const handleAnswer = () => {
     console.log('🔵 CallPanel Answer button clicked!');
+    console.log('🔵 CallPanel dbCall:', dbCall?.id, 'status:', dbCall?.call_status);
     answerCall();
-    onAnswerCall();
+    // Pass the actual call object instead of calling with no parameters
+    if (dbCall) {
+      onAnswerCall(dbCall);
+    } else {
+      console.error('❌ CallPanel: No dbCall to pass to onAnswerCall');
+      onAnswerCall();
+    }
   };
 
   const handleEnd = () => {
