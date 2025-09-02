@@ -48,6 +48,8 @@ export const EnhancedCustomerInfoPanel = ({ customerProfile, activeCall }: Enhan
   });
   const [loading, setLoading] = useState(false);
 
+  console.log('👤 EnhancedCustomerInfoPanel rendered with activeCall:', activeCall?.id, 'customerProfile:', customerProfile?.id);
+
   useEffect(() => {
     if (customerProfile) {
       fetchEnhancedCustomerData(customerProfile);

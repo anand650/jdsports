@@ -25,6 +25,8 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const { toast } = useToast();
 
+  console.log('🏢 CallCenterLayout rendered - activeCall:', activeCall?.id, 'customerProfile:', customerProfile?.id);
+
   // Subscribe to incoming calls and call updates
   useEffect(() => {
     const channel = supabase
@@ -91,13 +93,20 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   }, [activeCall, incomingCall, toast]);
 
   const handleAnswerCall = async (call?: Call) => {
-    const callToAnswer = call || incomingCall;
-    if (!callToAnswer) return;
+    console.log('🔧 handleAnswerCall called with:', call?.id || 'no call provided');
+    console.log('🔧 incomingCall state:', incomingCall?.id || 'no incoming call');
     
-    console.log('🔧 Answering call:', callToAnswer.id);
+    const callToAnswer = call || incomingCall;
+    if (!callToAnswer) {
+      console.error('❌ No call to answer');
+      return;
+    }
+    
+    console.log('📞 Answering call:', callToAnswer.id, 'status:', callToAnswer.call_status);
     
     try {
       // First update the call status and assign agent
+      console.log('🔄 Updating call in database...');
       const { data: updatedCall, error: updateError } = await supabase
         .from('calls')
         .update({ 
@@ -108,11 +117,15 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        throw updateError;
+      }
       
-      console.log('✅ Call status updated:', updatedCall);
+      console.log('✅ Call status updated in database:', updatedCall);
       
       // Set active call with updated data
+      console.log('🎯 Setting activeCall state...');
       setActiveCall(updatedCall as Call);
       setIncomingCall(null);
       
