@@ -31,15 +31,39 @@ serve(async (req) => {
     // Get the call record to find the Twilio Call SID
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
-      .select('twilio_call_sid')
+      .select('twilio_call_sid, call_status, customer_number')
       .eq('id', callId)
-      .single();
+      .maybeSingle();
 
-    if (callError || !callRecord || !callRecord.twilio_call_sid) {
-      throw new Error('Call record not found or missing Twilio Call SID');
+    if (callError) {
+      console.error('Database error fetching call:', callError);
+      throw new Error(`Database error: ${callError.message}`);
+    }
+
+    if (!callRecord) {
+      console.error('Call record not found for ID:', callId);
+      throw new Error('Call record not found');
     }
 
     console.log('Found call record:', callRecord);
+
+    if (!callRecord.twilio_call_sid) {
+      console.log('No Twilio Call SID found for call:', callId);
+      console.log('This might be a simulated call or Twilio SID not set yet');
+      
+      // Return success but indicate no transcription started
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Call found but no Twilio SID available for transcription',
+          callId: callId,
+          hasTranscription: false
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     // Initialize Twilio client
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');

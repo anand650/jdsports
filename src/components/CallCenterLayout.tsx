@@ -255,7 +255,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       setTimeout(async () => {
         try {
           console.log('🎙️ Starting transcription for call:', callToAnswer.id);
-          const { error: transcriptionError } = await supabase.functions.invoke('twilio-start-transcription', {
+          const { data: transcriptionResult, error: transcriptionError } = await supabase.functions.invoke('twilio-start-transcription', {
             body: { callId: callToAnswer.id }
           });
           
@@ -267,10 +267,28 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               variant: "destructive",
             });
           } else {
-            console.log('✅ Transcription started successfully');
+            console.log('✅ Transcription response:', transcriptionResult);
+            if (transcriptionResult?.hasTranscription === false) {
+              console.log('ℹ️ No Twilio SID available - transcription not started');
+              toast({
+                title: "Transcription Info",
+                description: "Call connected, but live transcription unavailable",
+              });
+            } else {
+              console.log('✅ Transcription started successfully');
+              toast({
+                title: "Transcription Started",
+                description: "Live transcription is now active",
+              });
+            }
           }
         } catch (error) {
           console.error('❌ Failed to start transcription:', error);
+          toast({
+            title: "Transcription Warning", 
+            description: "Could not start live transcription",
+            variant: "destructive",
+          });
         }
       }, 2000); // 2 second delay
 
