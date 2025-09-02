@@ -376,7 +376,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         session_id: session.id,
         sender_type: 'agent' as const,
         sender_id: user?.id,
-        content: "The human agent has completed their assistance and handed your chat back to me, your AI assistant. I'm here to continue helping you with any questions you may have!",
+        content: "I've completed my assistance and am now handing your chat back to our AI assistant. They'll continue to help you with any additional questions!",
         metadata: { is_agent_handover: true }
       };
 
@@ -394,51 +394,55 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       // Add a small delay to ensure any async operations complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Then revert session back to AI handling - try step by step
-      console.log('🔄 Attempting to update session...');
+      // Debug: Log current user and session details
+      console.log('🔍 Debug info before update:');
+      console.log('- Current user ID:', user?.id);
+      console.log('- User role:', user?.user_metadata?.role);
+      console.log('- Session ID:', session.id);
+      console.log('- Session user_id:', session.user_id);
+      console.log('- Session assigned_agent_id:', session.assigned_agent_id);
+      console.log('- Session status:', session.status);
+
+      // Use the secure service function to handle session handover
+      console.log('🔄 Attempting to hand over session using service function...');
+      const { data: handoverResult, error: sessionUpdateError } = await supabase
+        .rpc('handover_session_to_ai', {
+          session_id_param: session.id,
+          agent_id_param: user?.id
+        });
+
+      if (sessionUpdateError) {
+        console.error('❌ Session update error:', sessionUpdateError);
+        console.log('🔍 Error details:', {
+          code: sessionUpdateError.code,
+          message: sessionUpdateError.message,
+          details: sessionUpdateError.details,
+          hint: sessionUpdateError.hint
+        });
+        throw sessionUpdateError;
+      }
+      console.log('✅ Session handed over to AI successfully:', handoverResult);
+
+      // After successful handover, trigger AI welcome back message
+      console.log('🤖 Triggering AI welcome back response...');
       try {
-        // Test with just status first
-        console.log('📝 Step 1: Updating status only...');
-        const { error: statusError } = await supabase
-          .from('chat_sessions')
-          .update({ status: 'active' })
-          .eq('id', session.id);
+        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('chatbot-rag', {
+          body: {
+            message: "Hello! I'm back to assist you. How can I help you today?",
+            sessionId: session.id,
+            userId: session.user_id,
+            isHandoverResponse: true
+          }
+        });
 
-        if (statusError) {
-          console.error('❌ Status update error:', statusError);
-          throw statusError;
+        if (aiError) {
+          console.error('❌ Error triggering AI welcome response:', aiError);
+        } else {
+          console.log('✅ AI welcome response triggered successfully');
         }
-        console.log('✅ Status updated successfully');
-
-        // Then clear agent assignment
-        console.log('📝 Step 2: Clearing agent assignment...');
-        const { error: agentError } = await supabase
-          .from('chat_sessions')
-          .update({ assigned_agent_id: null })
-          .eq('id', session.id);
-
-        if (agentError) {
-          console.error('❌ Agent clearing error:', agentError);
-          throw agentError;
-        }
-        console.log('✅ Agent assignment cleared successfully');
-
-        // Finally clear escalation timestamp
-        console.log('📝 Step 3: Clearing escalation timestamp...');
-        const { error: escalationError } = await supabase
-          .from('chat_sessions')
-          .update({ escalated_at: null })
-          .eq('id', session.id);
-
-        if (escalationError) {
-          console.error('❌ Escalation clearing error:', escalationError);
-          throw escalationError;
-        }
-        console.log('✅ Session fully updated successfully');
-        
-      } catch (sessionError) {
-        console.error('❌ Caught session update error:', sessionError);
-        throw sessionError;
+      } catch (aiResponseError) {
+        console.error('❌ Failed to trigger AI response after handover:', aiResponseError);
+        // Don't throw - handover was successful even if AI response failed
       }
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));

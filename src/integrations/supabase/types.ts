@@ -682,6 +682,10 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
+      handover_session_to_ai: {
+        Args: { agent_id_param: string; session_id_param: string }
+        Returns: boolean
+      }
       hnsw_bit_support: {
         Args: { "": unknown }
         Returns: unknown
