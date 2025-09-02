@@ -408,6 +408,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           <div className="p-4 h-full">
             <CallPanel
               activeCall={activeCall}
+              incomingCall={incomingCall}
               onAnswerCall={handleAnswerCall}
               onEndCall={handleEndCall}
             />

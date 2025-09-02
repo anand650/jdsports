@@ -8,11 +8,12 @@ import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 interface CallPanelProps {
   activeCall: Call | null;
+  incomingCall: Call | null;
   onAnswerCall: (call?: Call) => void;
   onEndCall: () => void;
 }
 
-export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallPanelProps) => {
+export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEndCall }: CallPanelProps) => {
   const [callDuration, setCallDuration] = useState(0);
   
   const {
@@ -55,13 +56,18 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
 
   const handleAnswer = () => {
     console.log('🔵 CallPanel Answer button clicked!');
-    console.log('🔵 CallPanel dbCall:', dbCall?.id, 'status:', dbCall?.call_status);
+    console.log('🔵 CallPanel dbCall:', dbCall?.id, 'incomingCall:', incomingCall?.id);
+    
+    const callToAnswer = dbCall || incomingCall;
+    console.log('🔵 CallPanel callToAnswer:', callToAnswer?.id, 'status:', callToAnswer?.call_status);
+    
     answerCall();
-    // Pass the actual call object instead of calling with no parameters
-    if (dbCall) {
-      onAnswerCall(dbCall);
+    
+    if (callToAnswer) {
+      console.log('🔵 CallPanel calling onAnswerCall with:', callToAnswer.id);
+      onAnswerCall(callToAnswer);
     } else {
-      console.error('❌ CallPanel: No dbCall to pass to onAnswerCall');
+      console.error('❌ CallPanel: No call to answer (neither dbCall nor incomingCall)');
       onAnswerCall();
     }
   };
@@ -102,14 +108,14 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {(dbCall || twilioCall) ? (
+        {(dbCall || incomingCall || twilioCall) ? (
           <>
             <div className="bg-sidebar-accent p-4 rounded-lg">
               <p className="text-sm font-medium text-sidebar-accent-foreground">
                 Customer Number
               </p>
               <p className="text-lg font-mono text-sidebar-foreground">
-                {dbCall?.customer_number || 'Unknown'}
+                {(dbCall || incomingCall)?.customer_number || 'Unknown'}
               </p>
             </div>
             
@@ -177,7 +183,7 @@ export const CallPanel = ({ activeCall: dbCall, onAnswerCall, onEndCall }: CallP
                     End Call
                   </Button>
                 </>
-              ) : dbCall && !twilioCall ? (
+              ) : (dbCall || incomingCall) && !twilioCall ? (
                 <Button 
                   onClick={handleAnswer} 
                   className="w-full bg-green-600 hover:bg-green-700 text-white"
