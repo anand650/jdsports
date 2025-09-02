@@ -376,7 +376,7 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
         session_id: session.id,
         sender_type: 'agent' as const,
         sender_id: user?.id,
-        content: "The human agent has completed their assistance and handed your chat back to me, your AI assistant. I'm here to continue helping you with any questions you may have!",
+        content: "I've completed my assistance and am now handing your chat back to our AI assistant. They'll continue to help you with any additional questions!",
         metadata: { is_agent_handover: true }
       };
 
@@ -439,6 +439,28 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
       } catch (sessionError) {
         console.error('❌ Caught session update error:', sessionError);
         throw sessionError;
+      }
+
+      // After successful handover, trigger AI welcome back message
+      console.log('🤖 Triggering AI welcome back response...');
+      try {
+        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('chatbot-rag', {
+          body: {
+            message: "Hello! I'm back to assist you. How can I help you today?",
+            sessionId: session.id,
+            userId: session.user_id,
+            isHandoverResponse: true
+          }
+        });
+
+        if (aiError) {
+          console.error('❌ Error triggering AI welcome response:', aiError);
+        } else {
+          console.log('✅ AI welcome response triggered successfully');
+        }
+      } catch (aiResponseError) {
+        console.error('❌ Failed to trigger AI response after handover:', aiResponseError);
+        // Don't throw - handover was successful even if AI response failed
       }
 
       setActiveSessions(prev => prev.filter(s => s.id !== session.id));

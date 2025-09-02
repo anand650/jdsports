@@ -42,7 +42,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, sessionId, userId } = await req.json();
+    const { message, sessionId, userId, isHandoverResponse } = await req.json();
 
     if (!message || !sessionId) {
       throw new Error('Message and session ID are required');
@@ -220,12 +220,15 @@ ${userCart ? `Current Cart:\n${userCart}\n` : 'Cart is empty.\n'}`;
       message.toLowerCase().includes(keyword)
     );
 
-    // Create enhanced AI prompt with RAG context
+    // Create enhanced AI prompt with handover context
+    const isHandover = isHandoverResponse || false;
     const systemPrompt = `You are a helpful customer service assistant for JD Sports, a leading sports fashion retailer. You have access to comprehensive information including knowledge base, product catalog, and user-specific data.
+
+${isHandover ? 'IMPORTANT: You are resuming this conversation after a human agent has handed the chat back to you. Welcome the customer back naturally and ask how you can continue to help them.' : ''}
 
 CAPABILITIES:
 1. Product recommendations and information
-2. Size and fit guidance
+2. Size and fit guidance  
 3. Order status and history inquiries
 4. Returns and exchanges (365-day return policy)
 5. General store policies and information
@@ -251,8 +254,9 @@ GUIDELINES:
 - Always mention our 365-day return policy when relevant
 - Keep responses concise but helpful
 - If you don't have specific information, be honest and offer alternatives
+${isHandover ? '- Welcome the customer back warmly and seamlessly continue the conversation' : ''}
 
-${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Acknowledge their concern and suggest connecting them with a human agent.' : ''}`;
+${needsEscalation && !isHandover ? 'IMPORTANT: The customer seems to need human assistance. Acknowledge their concern and suggest connecting them with a human agent.' : ''}`;
 
     // Call OpenAI API with enhanced model
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -283,18 +287,21 @@ ${needsEscalation ? 'IMPORTANT: The customer seems to need human assistance. Ack
 
     console.log('AI response:', aiMessage);
 
-    // Save user message to database
-    const { error: userMessageError } = await supabase
-      .from('chat_messages')
-      .insert({
-        session_id: sessionId,
-        sender_type: 'user',
-        content: message,
-        metadata: { user_id: userId || null }
-      });
+    // Skip saving user message if this is a handover response
+    if (!isHandoverResponse) {
+      // Save user message to database
+      const { error: userMessageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId,
+          sender_type: 'user',
+          content: message,
+          metadata: { user_id: userId || null }
+        });
 
-    if (userMessageError) {
-      console.error('Error saving user message:', userMessageError);
+      if (userMessageError) {
+        console.error('Error saving user message:', userMessageError);
+      }
     }
 
     // Save AI response to database
